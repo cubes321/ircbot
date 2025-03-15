@@ -24,7 +24,7 @@ client = genai.Client(api_key=api_key)
 SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
 PORT = 6667  # Standard IRC port
 NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
-CHANNELS = ["#nerds"]  # Channel to join
+CHANNELS = ["#anime"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
 sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #nerds. "
@@ -59,7 +59,7 @@ def on_message(connection, event):
     inputtext = event.source.nick + ": " + inputtext
     chan = event.target
     if event.arguments[0][:len(NICK)].lower().strip() == NICK.lower():
-        if chan == "#nerds":
+        if chan == "#anime":
             get_ai_answer(inputtext, connection, event)
             return
     cnt.msg += 1
@@ -68,6 +68,7 @@ def on_message(connection, event):
         random_range = random.uniform(0, 50)
         print(f"random range: {random_range}")
         if cnt.msg < random_range:
+            print(f"inputtest: {inputtext}")
             get_ai_answer(inputtext, connection, event)
             cnt.msg = 0
 
