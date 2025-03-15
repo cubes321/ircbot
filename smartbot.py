@@ -17,7 +17,7 @@ NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
 CHANNELS = ["#uk"]  # Channel to join
 
 sys_instruct_init="Limit your output to 450 characters. You are HAL 9000 "
-sys_instruct = "Limit your output to 450 characters and up to 3 paragraphs. You are HAL 9000. The request is of the format '[name]: [request]'.  You are in an IRC channel called #uk. "
+sys_instruct = "f'Limit your output to 450 characters and up to 3 paragraphs. You are {NICK}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #uk. "
 
 def on_connect(connection, event):
     for chan in CHANNELS:
