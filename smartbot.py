@@ -21,7 +21,7 @@ client = genai.Client(api_key=api_key)
 SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
 PORT = 6667  # Standard IRC port
 NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
-CHANNELS = ["#cubes"]  # Channel to join
+CHANNELS = ["#anime"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
 sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. "
@@ -50,7 +50,7 @@ def main():
     except irc.client.ServerConnectionError:
         print("Connection error")
 
-def on_message(connection, event):
+def on_message(connection, event, counter):
     inputtext = event.arguments[0][len(NICK):]
     logging(event, inputtext)
     inputtext = event.source.nick + ": " + inputtext
