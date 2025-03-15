@@ -13,7 +13,7 @@ client = genai.Client(api_key=api_key)
 # IRC Server details
 SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
 PORT = 6667  # Standard IRC port
-NICK = "HAL9000"  # Bot's nickname
+NICK = sys.argv[1]  # Bot's nickname
 CHANNELS = ["#uk"]  # Channel to join
 
 sys_instruct_init="Limit your output to 450 characters. You are HAL 9000 "
@@ -43,7 +43,7 @@ def on_message(connection, event):
     logging(event, inputtext)
     inputtext = event.source.nick + ": " + inputtext
     chan = event.target
-    if event.arguments[0][:7].lower().strip() == "hal9000":
+    if event.arguments[0][:7].lower().strip() == sys.argv[1].lower():
         if chan == "#uk":
             get_ai_answer(inputtext, connection, event)
 
