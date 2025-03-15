@@ -11,7 +11,8 @@ import time
 import sys
 import random
 
-counter = 0
+class counter:
+    msg = 0
 
 with open('e:/ai/genai_api_key.txt') as file:
     api_key = file.read().strip()
@@ -21,10 +22,10 @@ client = genai.Client(api_key=api_key)
 SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
 PORT = 6667  # Standard IRC port
 NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
-CHANNELS = ["#anime"]  # Channel to join
+CHANNELS = ["#nerds"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
-sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. "
+sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #nerds. "
 
 chat = client.chats.create(
         model="gemini-2.0-flash-thinking-exp",
@@ -50,7 +51,7 @@ def main():
     except irc.client.ServerConnectionError:
         print("Connection error")
 
-def on_message(connection, event, counter):
+def on_message(connection, event):
     inputtext = event.arguments[0][len(NICK):]
     logging(event, inputtext)
     inputtext = event.source.nick + ": " + inputtext
@@ -59,11 +60,12 @@ def on_message(connection, event, counter):
         if chan == "#cubes":
             get_ai_answer(inputtext, connection, event)
             return
-    counter = counter + 1
-    if counter > 25:
+    counter.msg() += 1
+    if counter.msg() > 25:
         random_range = random.uniform(0, 50)
-        if counter < random_range:
+        if counter.msg() < random_range:
             get_ai_answer(inputtext, connection, event)
+            counter = 0
 
 def remove_lfcr(text):
     return text.replace("\n"," ").replace("\r"," ")
