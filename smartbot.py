@@ -14,6 +14,8 @@ import random
 class counter:
     msg = 0
 
+cnt = counter()
+
 with open('e:/ai/genai_api_key.txt') as file:
     api_key = file.read().strip()
 client = genai.Client(api_key=api_key)
@@ -57,15 +59,17 @@ def on_message(connection, event):
     inputtext = event.source.nick + ": " + inputtext
     chan = event.target
     if event.arguments[0][:len(NICK)].lower().strip() == NICK.lower():
-        if chan == "#cubes":
+        if chan == "#nerds":
             get_ai_answer(inputtext, connection, event)
             return
-    counter.msg() += 1
-    if counter.msg() > 25:
+    cnt.msg += 1
+    print(f"cnt.msg: {cnt.msg}")
+    if cnt.msg > 25:
         random_range = random.uniform(0, 50)
-        if counter.msg() < random_range:
+        print(f"random range: {random_range}")
+        if cnt.msg < random_range:
             get_ai_answer(inputtext, connection, event)
-            counter = 0
+            cnt.msg = 0
 
 def remove_lfcr(text):
     return text.replace("\n"," ").replace("\r"," ")
