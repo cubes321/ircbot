@@ -1,5 +1,5 @@
 # 1st argument = bot's nickname
-# 2nd argument = bot's character type
+# 2nd argument = bot's character type - enclose in quotes if it contains spaces
 
 import irc.client
 import requests
@@ -8,6 +8,10 @@ import json
 from google import genai
 from google.genai import types
 import time
+import sys
+import random
+
+counter = 0
 
 with open('e:/ai/genai_api_key.txt') as file:
     api_key = file.read().strip()
@@ -17,10 +21,15 @@ client = genai.Client(api_key=api_key)
 SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
 PORT = 6667  # Standard IRC port
 NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
-CHANNELS = ["#uk"]  # Channel to join
+CHANNELS = ["#cubes"]  # Channel to join
 
-sys_instruct_init="f'Limit your output to 450 characters. You are {sys.argv[2]}"
-sys_instruct = "f'Limit your output to 450 characters and up to 3 paragraphs. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #uk. "
+sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
+sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. "
+
+chat = client.chats.create(
+        model="gemini-2.0-flash-thinking-exp",
+        config=types.GenerateContentConfig(system_instruction=sys_instruct),
+    )
 
 def on_connect(connection, event):
     for chan in CHANNELS:
@@ -42,23 +51,25 @@ def main():
         print("Connection error")
 
 def on_message(connection, event):
-    inputtext = event.arguments[0][7:]
+    inputtext = event.arguments[0][len(NICK):]
     logging(event, inputtext)
     inputtext = event.source.nick + ": " + inputtext
     chan = event.target
     if event.arguments[0][:len(NICK)].lower().strip() == NICK.lower():
-        if chan == "#uk":
+        if chan == "#cubes":
+            get_ai_answer(inputtext, connection, event)
+            return
+    counter = counter + 1
+    if counter > 25:
+        random_range = random.uniform(0, 50)
+        if counter < random_range:
             get_ai_answer(inputtext, connection, event)
 
 def remove_lfcr(text):
     return text.replace("\n"," ").replace("\r"," ")
 
 def get_ai_answer(inputtext, connection, event):
-    response = client.models.generate_content(
-        model='gemini-2.0-flash-thinking-exp',
-        config=types.GenerateContentConfig(system_instruction=sys_instruct),
-        contents=inputtext,
-    )
+    response = chat.send_message(inputtext)
     para_text = response.text.splitlines()
     nonempty_para_text = [line for line in para_text if line.strip()]
     for paragraph in nonempty_para_text:
@@ -73,7 +84,7 @@ def connect_msg():
     response = client.models.generate_content(
         model="gemini-2.0-flash",
         config=types.GenerateContentConfig(system_instruction=sys_instruct_init),
-        contents="f'Create a suitable joining message for an IRC channel.  Mention that you can be called by using {NICK} followed by a message.",
+        contents=f"Create a suitable joining message for an IRC channel.  Mention that you can be called by using {NICK} followed by a message.",
     )
     return response.text
 
