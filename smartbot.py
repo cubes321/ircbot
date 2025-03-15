@@ -1,3 +1,6 @@
+# 1st argument = bot's nickname
+# 2nd argument = bot's character type
+
 import irc.client
 import requests
 import time
@@ -16,8 +19,8 @@ PORT = 6667  # Standard IRC port
 NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
 CHANNELS = ["#uk"]  # Channel to join
 
-sys_instruct_init="Limit your output to 450 characters. You are HAL 9000 "
-sys_instruct = "f'Limit your output to 450 characters and up to 3 paragraphs. You are {NICK}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #uk. "
+sys_instruct_init="f'Limit your output to 450 characters. You are {sys.argv[2]}"
+sys_instruct = "f'Limit your output to 450 characters and up to 3 paragraphs. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #uk. "
 
 def on_connect(connection, event):
     for chan in CHANNELS:
@@ -70,7 +73,7 @@ def connect_msg():
     response = client.models.generate_content(
         model="gemini-2.0-flash",
         config=types.GenerateContentConfig(system_instruction=sys_instruct_init),
-        contents="Create a suitable joining message for an IRC channel.  Mention that you can be called by using HAL9000 followed by a message.",
+        contents="f'Create a suitable joining message for an IRC channel.  Mention that you can be called by using {NICK} followed by a message.",
     )
     return response.text
 
