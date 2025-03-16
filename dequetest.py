@@ -69,3 +69,4 @@ d.append("K")
 print(d)
 
 print(list(d))
+print(" ".join(list(d)))
