@@ -10,6 +10,7 @@ from google.genai import types
 import time
 import sys
 import random
+from collections import deque
 
 class counter:
     def __init__(self, value):
