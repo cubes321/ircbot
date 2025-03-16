@@ -44,7 +44,7 @@ NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
 CHANNELS = ["#anime"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
-sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. "
+sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. Your name is {NICK}"
 
 chat = client.chats.create(
         model="gemini-2.0-flash-thinking-exp",
@@ -85,19 +85,14 @@ def on_message(connection, event):
     cnt.increment()
     chatqueue.append(event.source.nick + ": " + inputtext2)
     print(f"cnt.msg: {cnt.value}")
-    print(f"chatqueue: {"; ".join(list(chatqueue))}")
+#    print(f"chatqueue: {"; ".join(list(chatqueue))}")
     if cnt.value > 10:
         random_range = random.uniform(0, 40)
         print(f"random range: {random_range}")
         if cnt.value > random_range:
             inputqueue = "; ".join(list(chatqueue))
-#            print(f"***chatqueue: {"; ".join(list(chatqueue))}")
             print(inputqueue)
-#            print(f"inputtest: {inputtext}")
-#            get_ai_answer(inputtext2, connection, event)
-#            get_ai_answer(" ".join(list(chatqueue)), connection, event)
             get_ai_answer(inputqueue, connection, event)
-#            cnt.msg = 0
             cnt.clear()
             print("*****resetting counter*****")
 
