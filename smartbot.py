@@ -11,6 +11,7 @@ import time
 import sys
 import random
 from collections import deque
+from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
 
 class counter:
     def __init__(self, value):
@@ -30,9 +31,10 @@ class dq:
     def __iter__(self):
         return iter(self.d)
 
-chatqueue = dq()        
-cnt = counter(0)
-
+chatqueuegeeks = dq()
+chatqueueanime = dq()       
+cntanime = counter(0)
+cntgeeks = counter(0)
 with open('e:/ai/genai_api_key.txt') as file:
     api_key = file.read().strip()
 client = genai.Client(api_key=api_key)
@@ -41,14 +43,23 @@ client = genai.Client(api_key=api_key)
 SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
 PORT = 6667  # Standard IRC port
 NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
-CHANNELS = ["#anime"]  # Channel to join
+CHANNELS = ["#anime", "#geeks"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
-sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. Your name is {NICK}"
+sys_instruct_anime = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. Your name is {NICK}"
+sys_instruct_geeks = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #geeks. Your name is {NICK}"
+sys_instruct_news="Limit your output to 2 paragraphs each at most 450 characters."
 
-chat = client.chats.create(
+google_search_tool = Tool(google_search=GoogleSearch())
+
+chatanime = client.chats.create(
         model="gemini-2.0-flash-thinking-exp",
-        config=types.GenerateContentConfig(system_instruction=sys_instruct),
+        config=types.GenerateContentConfig(system_instruction=sys_instruct_anime),
+    )
+
+chatgeeks = client.chats.create(
+        model="gemini-2.0-flash-thinking-exp",
+        config=types.GenerateContentConfig(system_instruction=sys_instruct_geeks),
     )
 
 def on_connect(connection, event):
@@ -77,30 +88,48 @@ def on_message(connection, event):
     chan = event.target
     logging(event, inputtext)
     if event.arguments[0][:len(NICK)].lower().strip() == NICK.lower():
-        if chan == "#anime":
-            get_ai_answer(inputtext, connection, event)
+        if event.arguments[0].find("!news") != -1:
+            get_ai_news(event, connection)
             return
-#    cnt.msg += 1
-#    logging(event, inputtext)
-    cnt.increment()
-    chatqueue.append(event.source.nick + ": " + inputtext2)
-    print(f"cnt.msg: {cnt.value}")
-#    print(f"chatqueue: {"; ".join(list(chatqueue))}")
-    if cnt.value > 10:
-        random_range = random.uniform(0, 40)
-        print(f"random range: {random_range}")
-        if cnt.value > random_range:
-            inputqueue = "; ".join(list(chatqueue))
-            print(inputqueue)
-            get_ai_answer(inputqueue, connection, event)
-            cnt.clear()
-            print("*****resetting counter*****")
+        get_ai_answer(inputtext, connection, event)
+        return
+    if event.target == "#anime":        
+        cntanime.increment()
+        chatqueueanime.append(event.source.nick + ": " + inputtext2)
+        print(f"cnt.msg: {cntanime.value}")
+        if cntanime.value > 10:
+            random_range = random.uniform(0, 40)
+            print(f"random range: {random_range}")
+            if cntanime.value > random_range:
+                inputqueue = "; ".join(list(chatqueueanime))
+                print(inputqueue)
+                get_ai_answer(inputqueue, connection, event)
+                cntanime.clear()
+                print("***** resetting counter: #anime *****")
+    if event.target == "#geeks":        
+        cntgeeks.increment()
+        chatqueuegeeks.append(event.source.nick + ": " + inputtext2)
+        print(f"cnt.msg: {cntgeeks.value}")
+        if cntgeeks.value > 10:
+            random_range = random.uniform(0, 40)
+            print(f"random range: {random_range}")
+            if cntgeeks.value > random_range:
+                inputqueue = "; ".join(list(chatqueuegeeks))
+                print(inputqueue)
+                get_ai_answer(inputqueue, connection, event)
+                cntgeeks.clear()
+                print("***** resetting counter: #geeks *****")
+
+
 
 def remove_lfcr(text):
     return text.replace("\n"," ").replace("\r"," ")
 
 def get_ai_answer(inputtext, connection, event):
-    response = chat.send_message(inputtext)
+    if event.target == "#anime":
+        response = chatanime.send_message(inputtext)
+    if event.target == "#geeks":
+        response = chatgeeks.send_message(inputtext)
     para_text = response.text.splitlines()
     nonempty_para_text = [line for line in para_text if line.strip()]
     for paragraph in nonempty_para_text:
@@ -122,6 +151,23 @@ def connect_msg():
 def logging(event, inputtext):
     print(event.target + ":" + event.source.nick + ": " + event.arguments[0])
     print(event.target + ":" + event.source.nick + ": " + inputtext)
+
+def get_ai_news(event, connection):
+    response = client.models.generate_content(
+    model='gemini-2.0-flash-thinking-exp',
+    config=types.GenerateContentConfig(system_instruction=sys_instruct_news, tools =[google_search_tool]),
+    contents="What is the latest news?",
+    )  
+    para_text = response.text.splitlines()
+    nonempty_para_text = [line for line in para_text if line.strip()]
+    for paragraph in nonempty_para_text:
+        output = remove_lfcr(paragraph)
+        output = output[:450]
+        print(output)
+        connection.privmsg(event.target,output)        
+        time.sleep(1)
+    return
+
 
 if __name__ == "__main__":
     main()
