@@ -27,6 +27,8 @@ class dq:
         self.d.append(x)
     def count(self, x):
         return self.d.count(x)
+    def __iter__(self):
+        return iter(self.d)
 
 chatqueue = dq()        
 cnt = counter(0)
@@ -39,7 +41,7 @@ client = genai.Client(api_key=api_key)
 SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
 PORT = 6667  # Standard IRC port
 NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
-CHANNELS = ["#cubes"]  # Channel to join
+CHANNELS = ["#anime"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
 sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. "
@@ -71,23 +73,24 @@ def main():
 def on_message(connection, event):
     inputtext = event.arguments[0][len(NICK):]
     inputtext2 = event.arguments[0].strip()
-    logging(event, inputtext)
-    inputtext = event.source.nick + ": " + inputtext
+    inputtext3 = event.source.nick + ": " + inputtext
     chan = event.target
     if event.arguments[0][:len(NICK)].lower().strip() == NICK.lower():
         if chan == "#anime":
-            get_ai_answer(inputtext, connection, event)
+            get_ai_answer(inputtext2, connection, event)
             return
 #    cnt.msg += 1
+#    logging(event, inputtext)
+    logging(event, inputtext2)
     cnt.increment()
-    chatqueue.append(inputtext)
+    chatqueue.append(event.source.nick + ": " + inputtext2)
     print(f"cnt.msg: {cnt.value}")
-    print(f"chatqueue: {" ".join(list(chatqueue))}")
+    print(f"chatqueue: {"; ".join(list(chatqueue))}")
     if cnt.value > 10:
-        random_range = random.uniform(0, 50)
+        random_range = random.uniform(0, 40)
         print(f"random range: {random_range}")
         if cnt.value > random_range:
-            print(f"chatqueue: {" ".join(list(chatqueue))}")
+            print(f"chatqueue: {"; ".join(list(chatqueue))}")
 #            print(f"inputtest: {inputtext}")
 #            get_ai_answer(inputtext2, connection, event)
             get_ai_answer(" ".join(list(chatqueue)), connection, event)
