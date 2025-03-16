@@ -71,17 +71,17 @@ def main():
         print("Connection error")
 
 def on_message(connection, event):
-    inputtext = event.arguments[0][len(NICK):]
+    inputtext = event.arguments[0].strip()
     inputtext2 = event.arguments[0].strip()
-    inputtext3 = event.source.nick + ": " + inputtext
+    inputtext = event.source.nick + ": " + inputtext
     chan = event.target
+    logging(event, inputtext)
     if event.arguments[0][:len(NICK)].lower().strip() == NICK.lower():
         if chan == "#anime":
-            get_ai_answer(inputtext2, connection, event)
+            get_ai_answer(inputtext, connection, event)
             return
 #    cnt.msg += 1
 #    logging(event, inputtext)
-    logging(event, inputtext2)
     cnt.increment()
     chatqueue.append(event.source.nick + ": " + inputtext2)
     print(f"cnt.msg: {cnt.value}")
