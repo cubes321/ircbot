@@ -90,12 +90,16 @@ def on_message(connection, event):
         random_range = random.uniform(0, 40)
         print(f"random range: {random_range}")
         if cnt.value > random_range:
-            print(f"chatqueue: {"; ".join(list(chatqueue))}")
+            inputqueue = "; ".join(list(chatqueue))
+#            print(f"***chatqueue: {"; ".join(list(chatqueue))}")
+            print(inputqueue)
 #            print(f"inputtest: {inputtext}")
 #            get_ai_answer(inputtext2, connection, event)
-            get_ai_answer(" ".join(list(chatqueue)), connection, event)
+#            get_ai_answer(" ".join(list(chatqueue)), connection, event)
+            get_ai_answer(inputqueue, connection, event)
 #            cnt.msg = 0
             cnt.clear()
+            print("*****resetting counter*****")
 
 def remove_lfcr(text):
     return text.replace("\n"," ").replace("\r"," ")
