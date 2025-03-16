@@ -25,6 +25,8 @@ class dq:
         self.d = deque(maxlen=10)
     def append(self, x):
         self.d.append(x)
+    def count(self, x):
+        return self.d.count(x)
 
 chatqueue = dq()        
 cnt = counter(0)
@@ -37,7 +39,7 @@ client = genai.Client(api_key=api_key)
 SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
 PORT = 6667  # Standard IRC port
 NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
-CHANNELS = ["#anime"]  # Channel to join
+CHANNELS = ["#cubes"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
 sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. "
@@ -80,14 +82,15 @@ def on_message(connection, event):
     cnt.increment()
     chatqueue.append(inputtext)
     print(f"cnt.msg: {cnt.value}")
+    print(f"chatqueue: {" ".join(list(chatqueue))}")
     if cnt.value > 10:
         random_range = random.uniform(0, 50)
         print(f"random range: {random_range}")
         if cnt.value > random_range:
-            print(f"chatqueue: {" ".join(chatqueue)}")
+            print(f"chatqueue: {" ".join(list(chatqueue))}")
 #            print(f"inputtest: {inputtext}")
 #            get_ai_answer(inputtext2, connection, event)
-            get_ai_answer(" ".join(chatqueue), connection, event)
+            get_ai_answer(" ".join(list(chatqueue)), connection, event)
 #            cnt.msg = 0
             cnt.clear()
 
