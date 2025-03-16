@@ -78,12 +78,12 @@ def on_message(connection, event):
             return
 #    cnt.msg += 1
     cnt.increment()
-    dq.append(inputtext)
-    print(f"cnt.msg: {cnt.msg}")
-    if cnt.msg > 10:
+    chatqueue.append(inputtext)
+    print(f"cnt.msg: {cnt.value}")
+    if cnt.value > 10:
         random_range = random.uniform(0, 50)
         print(f"random range: {random_range}")
-        if cnt.msg > random_range:
+        if cnt.value > random_range:
             print(f"chatqueue: {" ".join(chatqueue)}")
 #            print(f"inputtest: {inputtext}")
 #            get_ai_answer(inputtext2, connection, event)
