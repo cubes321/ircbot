@@ -5,6 +5,8 @@ import requests
 import time
 import json
 import re
+from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
+
 sys_instruct="Limit your output to two paragraphs each at most 450 characters."
 with open('e:/ai/genai_api_key.txt') as file:
     api_key = file.read().strip()
@@ -16,9 +18,12 @@ while True:
     test = input("request:")
     print(test)
 
+    google_search_tool = Tool(google_search=GoogleSearch()
+    )
+
     response = client.models.generate_content(
     model='gemini-2.0-flash-thinking-exp',
-    config=types.GenerateContentConfig(system_instruction=sys_instruct),
+    config=types.GenerateContentConfig(system_instruction=sys_instruct, tools =[google_search_tool]),
     contents=test,
 )
     para_text = response.text.splitlines()
