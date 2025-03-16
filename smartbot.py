@@ -96,7 +96,7 @@ def on_message(connection, event):
     if event.target == "#anime":        
         cntanime.increment()
         chatqueueanime.append(event.source.nick + ": " + inputtext2)
-        print(f"cnt.msg: {cntanime.value}")
+        print(f"cntanime.msg: {cntanime.value}")
         if cntanime.value > 10:
             random_range = random.uniform(0, 40)
             print(f"random range: {random_range}")
@@ -109,7 +109,7 @@ def on_message(connection, event):
     if event.target == "#geeks":        
         cntgeeks.increment()
         chatqueuegeeks.append(event.source.nick + ": " + inputtext2)
-        print(f"cnt.msg: {cntgeeks.value}")
+        print(f"cntgeeks.msg: {cntgeeks.value}")
         if cntgeeks.value > 10:
             random_range = random.uniform(0, 40)
             print(f"random range: {random_range}")
