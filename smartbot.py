@@ -12,9 +12,21 @@ import sys
 import random
 
 class counter:
-    msg = 0
+    def __init__(self, value):
+        self.value = value
+    def increment(self):
+        self.value += 1
+    def clear(self):
+        self.value = 0
 
-cnt = counter()
+class dq:
+    def __init__(self):
+        self.d = deque(maxlen=10)
+    def append(self, x):
+        self.d.append(x)
+
+chatqueue = dq()        
+cnt = counter(0)
 
 with open('e:/ai/genai_api_key.txt') as file:
     api_key = file.read().strip()
@@ -27,7 +39,7 @@ NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
 CHANNELS = ["#anime"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
-sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #nerds. "
+sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. "
 
 chat = client.chats.create(
         model="gemini-2.0-flash-thinking-exp",
@@ -55,6 +67,7 @@ def main():
 
 def on_message(connection, event):
     inputtext = event.arguments[0][len(NICK):]
+    inputtext2 = event.arguments[0].strip()
     logging(event, inputtext)
     inputtext = event.source.nick + ": " + inputtext
     chan = event.target
@@ -62,15 +75,20 @@ def on_message(connection, event):
         if chan == "#anime":
             get_ai_answer(inputtext, connection, event)
             return
-    cnt.msg += 1
+#    cnt.msg += 1
+    cnt.increment()
+    dq.append(inputtext)
     print(f"cnt.msg: {cnt.msg}")
-    if cnt.msg > 25:
+    if cnt.msg > 10:
         random_range = random.uniform(0, 50)
         print(f"random range: {random_range}")
-        if cnt.msg < random_range:
-            print(f"inputtest: {inputtext}")
-            get_ai_answer(inputtext, connection, event)
-            cnt.msg = 0
+        if cnt.msg > random_range:
+            print(f"chatqueue: {" ".join(chatqueue)}")
+#            print(f"inputtest: {inputtext}")
+#            get_ai_answer(inputtext2, connection, event)
+            get_ai_answer(" ".join(chatqueue), connection, event)
+#            cnt.msg = 0
+            cnt.clear()
 
 def remove_lfcr(text):
     return text.replace("\n"," ").replace("\r"," ")
