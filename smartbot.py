@@ -46,8 +46,8 @@ NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
 CHANNELS = ["#geeks"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
-sys_instruct_anime = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. Your name is {NICK}"
-sys_instruct_geeks = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #geeks. Your name is {NICK}"
+sys_instruct_anime = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called #anime. Your name is {NICK}"
+sys_instruct_geeks = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called #geeks. Your name is {NICK}"
 sys_instruct_news=f"You are {sys.argv[2]}.  Limit your output to 2 paragraphs each at most 450 characters."
 sys_instruct_art= f"You are {sys.argv[2]}.  Limit your output to 2 paragraphs each paragraph not more than 450 characters"
 
@@ -143,7 +143,8 @@ def get_ai_answer(inputtext, connection, event):
         response = chatgeeks.send_message(inputtext)
     if event.target == "#cubes":
         response = chatcubes.send_message(inputtext)
-    if response.text == "":
+    if not response.text:
+        print("*** Blank Response! ***")
         return
     para_text = response.text.splitlines()
     nonempty_para_text = [line for line in para_text if line.strip()]
