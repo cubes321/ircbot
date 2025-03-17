@@ -48,7 +48,7 @@ CHANNELS = ["#geeks"]  # Channel to join
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
 sys_instruct_anime = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #anime. Your name is {NICK}"
 sys_instruct_geeks = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You are in an IRC channel called #geeks. Your name is {NICK}"
-sys_instruct_news="Limit your output to 2 paragraphs each at most 450 characters."
+sys_instruct_news=f"You are {sys.argv[2]}.  Limit your output to 2 paragraphs each at most 450 characters."
 sys_instruct_art= f"You are {sys.argv[2]}.  Limit your output to 2 paragraphs each paragraph not more than 450 characters"
 
 google_search_tool = Tool(google_search=GoogleSearch())
@@ -98,12 +98,11 @@ def on_message(connection, event):
         if event.arguments[0].find("!news") != -1:
             get_ai_news(event, connection)
             return
-#        get_ai_answer(inputtext, connection, event)
-#        return
         if event.arguments[0].find("!art") != -1:
             get_ai_art(event, connection)
             return
-
+        get_ai_answer(inputtext, connection, event)
+        return
     if event.target == "#anime":        
         cntanime.increment()
         chatqueueanime.append(event.source.nick + ": " + inputtext2)
@@ -117,6 +116,7 @@ def on_message(connection, event):
                 get_ai_answer(inputqueue, connection, event)
                 cntanime.clear()
                 print("***** resetting counter: #anime *****")
+
     if event.target == "#geeks":        
         cntgeeks.increment()
         chatqueuegeeks.append(event.source.nick + ": " + inputtext2)
