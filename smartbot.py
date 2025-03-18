@@ -6,7 +6,7 @@ import requests
 import time
 import json
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 import time
 import sys
 import random
@@ -43,7 +43,7 @@ client = genai.Client(api_key=api_key)
 SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
 PORT = 6667  # Standard IRC port
 NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
-CHANNELS = ["#geeks"]  # Channel to join
+CHANNELS = ["#geeks", "#anime"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
 sys_instruct_anime = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called #anime. Your name is {NICK}"
@@ -190,12 +190,20 @@ def get_ai_art(event, connection):
     image_path = event.arguments[0][artlen:]
     print(image_path)
     image = requests.get(image_path)
-    response = client.models.generate_content(
+# version 1 18/03/2025
+    try:
+      response = client.models.generate_content(
         model="gemini-2.0-flash-exp",
         config=types.GenerateContentConfig(system_instruction=sys_instruct_art),
         contents=["Criticise the image in the style of an art critic",
               types.Part.from_bytes(data=image.content, mime_type="image/jpeg")]
         )
+    except errors.APIError as e:
+        print(e.code)
+        print(e.message)
+        connection.privmsg(event.target,"Art routire error!")
+        return
+# end of new error trapping routine
     para_text = response.text.splitlines()
     nonempty_para_text = [line for line in para_text if line.strip()]
     for paragraph in nonempty_para_text:
