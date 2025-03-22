@@ -54,6 +54,7 @@ sys_instruct_art= f"You are {sys.argv[2]}.  Limit your output to 2 paragraphs ea
 google_search_tool = Tool(google_search=GoogleSearch())
 
 chats = {}
+chatdeque = {}
 
 def on_connect(connection, event):
     for chan in CHANNELS:
@@ -63,7 +64,7 @@ def on_connect(connection, event):
                 config=types.GenerateContentConfig(system_instruction=sys_instruct),                
                 )
         chats[chan] = chat
-        
+        chatdeque[chan] = dq()
         print("Joining channel: " + chan)
         connection.join(chan)
         result = connect_msg()
@@ -96,26 +97,14 @@ def on_message(connection, event):
             return
         get_ai_answer(inputtext, connection, event)
         return
+    chatdeque[chan].append(event.source.nick + ": " + inputtext2)
     random_range = random.uniform(0,40)
     print(f"random range: {random_range}")    
     if random_range < (6):
         try:
-            response = client.models.generate_content(
-                model='gemini-2.0-flash-thinking-exp',
-                config=types.GenerateContentConfig(system_instruction=sys_instruct_news, tools =[google_search_tool]),
-                contents="Make up a response based on the last 10 or so requests and responses",
-                )
-            if not response.text:
-                print("*** Blank Response! ***")
-                return
-            para_text = response.text.splitlines()
-            nonempty_para_text = [line for line in para_text if line.strip()]
-            for paragraph in nonempty_para_text:
-                output = remove_lfcr(paragraph)
-                output = output[:450]
-                print("random: "+output)
-                connection.privmsg(event.target,output)        
-                time.sleep(1)
+            inputqueue = "; ".join(list(chatdeque[chan]))
+            print(inputqueue)
+            get_ai_answer(inputqueue,connection,event)
             return
         except errors.APIError as e:
             print(e.code)
