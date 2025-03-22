@@ -31,10 +31,11 @@ class dq:
     def __iter__(self):
         return iter(self.d)
 
-chatqueuegeeks = dq()
-chatqueueanime = dq()       
-cntanime = counter(0)
-cntgeeks = counter(0)
+#chatqueuegeeks = dq()
+#chatqueueanime = dq()       
+#cntanime = counter(0)
+#cntgeeks = counter(0)
+
 with open('e:/ai/genai_api_key.txt') as file:
     api_key = file.read().strip()
 client = genai.Client(api_key=api_key)
@@ -52,7 +53,7 @@ sys_instruct_art= f"You are {sys.argv[2]}.  Limit your output to 2 paragraphs ea
 
 google_search_tool = Tool(google_search=GoogleSearch())
 
-chats = []
+chats = {}
 
 def on_connect(connection, event):
     for chan in CHANNELS:
@@ -61,7 +62,8 @@ def on_connect(connection, event):
                 model="gemini-2.0-flash-thinking-exp",
                 config=types.GenerateContentConfig(system_instruction=sys_instruct),                
                 )
-        chats.append(chat)
+        chats[chan] = chat
+        
         print("Joining channel: " + chan)
         connection.join(chan)
         result = connect_msg()
@@ -156,13 +158,12 @@ def remove_lfcr(text):
 
 def get_ai_answer(inputtext, connection, event):
     try:
-# added 22/3/2025 14:41
-
-        for i, chat in enumerate(chats):
-            print(i)
-            print(chat)
-            response = chat.send_message(inputtext)
-# end of added 22/3/2025 14:41
+        chan = event.target
+        if chan in chats:
+            response = chats[chan].send_message(inputtext)
+        else:
+            print(f"Error: No chat instance for channel {chan}")
+            return
         if not response.text:
             print("*** Blank Response! ***")
             return
