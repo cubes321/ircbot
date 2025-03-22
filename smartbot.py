@@ -52,38 +52,22 @@ sys_instruct_art= f"You are {sys.argv[2]}.  Limit your output to 2 paragraphs ea
 
 google_search_tool = Tool(google_search=GoogleSearch())
 
-#chatanime = client.chats.create(
-#        model="gemini-2.0-flash-thinking-exp",
-#        config=types.GenerateContentConfig(system_instruction=sys_instruct_anime),
-#    )
-
-#chatgeeks = client.chats.create(
-#        model="gemini-2.0-flash-thinking-exp",
-#        config=types.GenerateContentConfig(system_instruction=sys_instruct_geeks),
-#    )    
-
-#chatcubes = client.chats.create(
-#        model="gemini-2.0-flash-thinking-exp",
-#        config=types.GenerateContentConfig(system_instruction=sys_instruct_geeks),
-#    )    
-
 chats = []
 
 def on_connect(connection, event):
     for chan in CHANNELS:
-       sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called {chan}. Your name is {NICK}"
-       chats.append(
-            client.chats.create(
-            model="gemini-2.0-flash-thinking-exp",
-            config=types.GenerateContentConfig(system_instruction=sys_instruct),                
-            )
-       )
-       print("Joining channel: " + chan)
-       connection.join(chan)
-       result = connect_msg()
-       result = remove_lfcr(result)
-       print(result)
-       connection.privmsg(chan, result)
+        sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called {chan}. Your name is {NICK}"
+        chat = client.chats.create(
+                model="gemini-2.0-flash-thinking-exp",
+                config=types.GenerateContentConfig(system_instruction=sys_instruct),                
+                )
+        chats.append(chat)
+        print("Joining channel: " + chan)
+        connection.join(chan)
+        result = connect_msg()
+        result = remove_lfcr(result)
+        print(result)
+        connection.privmsg(chan, result)
 
 def main():
     reactor = irc.client.Reactor()
@@ -145,12 +129,11 @@ def remove_lfcr(text):
 
 def get_ai_answer(inputtext, connection, event):
     try:
-        if event.target == "#anime":
-           response = chatanime.send_message(inputtext)
-        if event.target == "#geeks":
-           response = chatgeeks.send_message(inputtext)
-        if event.target == "#cubes":
-           response = chatcubes.send_message(inputtext)
+# added 22/3/2025 14:41
+
+        for i, chat in enumerate(chats):
+            response = chat.send_message(inputtext)
+# end of added 22/3/2025 14:41
         if not response.text:
             print("*** Blank Response! ***")
             return
