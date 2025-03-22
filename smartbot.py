@@ -46,31 +46,38 @@ NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
 CHANNELS = ["#geeks", "#anime"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
-sys_instruct_anime = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called #anime. Your name is {NICK}"
-sys_instruct_geeks = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called #geeks. Your name is {NICK}"
+#sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called #anime. Your name is {NICK}"
 sys_instruct_news=f"You are {sys.argv[2]}.  Limit your output to 2 paragraphs each at most 450 characters."
 sys_instruct_art= f"You are {sys.argv[2]}.  Limit your output to 2 paragraphs each paragraph not more than 450 characters"
 
 google_search_tool = Tool(google_search=GoogleSearch())
 
-chatanime = client.chats.create(
-        model="gemini-2.0-flash-thinking-exp",
-        config=types.GenerateContentConfig(system_instruction=sys_instruct_anime),
-    )
+#chatanime = client.chats.create(
+#        model="gemini-2.0-flash-thinking-exp",
+#        config=types.GenerateContentConfig(system_instruction=sys_instruct_anime),
+#    )
 
-chatgeeks = client.chats.create(
-        model="gemini-2.0-flash-thinking-exp",
-        config=types.GenerateContentConfig(system_instruction=sys_instruct_geeks),
-    )    
+#chatgeeks = client.chats.create(
+#        model="gemini-2.0-flash-thinking-exp",
+#        config=types.GenerateContentConfig(system_instruction=sys_instruct_geeks),
+#    )    
 
-chatcubes = client.chats.create(
-        model="gemini-2.0-flash-thinking-exp",
-        config=types.GenerateContentConfig(system_instruction=sys_instruct_geeks),
-    )    
+#chatcubes = client.chats.create(
+#        model="gemini-2.0-flash-thinking-exp",
+#        config=types.GenerateContentConfig(system_instruction=sys_instruct_geeks),
+#    )    
 
+chats = []
 
 def on_connect(connection, event):
     for chan in CHANNELS:
+       sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called {chan}. Your name is {NICK}"
+       chats.append(
+            client.chats.create(
+            model="gemini-2.0-flash-thinking-exp",
+            config=types.GenerateContentConfig(system_instruction=sys_instruct),                
+            )
+       )
        print("Joining channel: " + chan)
        connection.join(chan)
        result = connect_msg()
@@ -137,15 +144,21 @@ def remove_lfcr(text):
     return text.replace("\n"," ").replace("\r"," ")
 
 def get_ai_answer(inputtext, connection, event):
-    if event.target == "#anime":
-        response = chatanime.send_message(inputtext)
-    if event.target == "#geeks":
-        response = chatgeeks.send_message(inputtext)
-    if event.target == "#cubes":
-        response = chatcubes.send_message(inputtext)
-    if not response.text:
-        print("*** Blank Response! ***")
-        return
+    try:
+        if event.target == "#anime":
+           response = chatanime.send_message(inputtext)
+        if event.target == "#geeks":
+           response = chatgeeks.send_message(inputtext)
+        if event.target == "#cubes":
+           response = chatcubes.send_message(inputtext)
+        if not response.text:
+            print("*** Blank Response! ***")
+            return
+    except errors.APIerror as e:
+        print(e.code)
+        print(e.message)
+        connection.privmsg(event.target,"News routine error!")
+        return    
     para_text = response.text.splitlines()
     nonempty_para_text = [line for line in para_text if line.strip()]
     for paragraph in nonempty_para_text:
@@ -169,11 +182,20 @@ def logging(event, inputtext):
     print(event.target + ":" + event.source.nick + ": " + inputtext)
 
 def get_ai_news(event, connection):
-    response = client.models.generate_content(
-    model='gemini-2.0-flash-thinking-exp',
-    config=types.GenerateContentConfig(system_instruction=sys_instruct_news, tools =[google_search_tool]),
-    contents="What is the latest news?",
-    )  
+    try:
+        response = client.models.generate_content(
+        model='gemini-2.0-flash-thinking-exp',
+        config=types.GenerateContentConfig(system_instruction=sys_instruct_news, tools =[google_search_tool]),
+        contents="What is the latest news?",
+        )
+        if not response.text:
+            print("*** Blank Response! ***")
+            return
+    except errors.APIError as e:
+        print(e.code)
+        print(e.message)
+        connection.privmsg(event.target,"News routine error!")
+        return
     para_text = response.text.splitlines()
     nonempty_para_text = [line for line in para_text if line.strip()]
     for paragraph in nonempty_para_text:
@@ -201,7 +223,7 @@ def get_ai_art(event, connection):
     except errors.APIError as e:
         print(e.code)
         print(e.message)
-        connection.privmsg(event.target,"Art routire error!")
+        connection.privmsg(event.target,"Art routine error!")
         return
 # end of new error trapping routine
     para_text = response.text.splitlines()
