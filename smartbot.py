@@ -94,33 +94,60 @@ def on_message(connection, event):
             return
         get_ai_answer(inputtext, connection, event)
         return
-    if event.target == "#anime":        
-        cntanime.increment()
-        chatqueueanime.append(event.source.nick + ": " + inputtext2)
-        print(f"cntanime.msg: {cntanime.value}")
-        if cntanime.value > 10:
-            random_range = random.uniform(0, 40)
-            print(f"random range: {random_range}")
-            if cntanime.value > random_range:
-                inputqueue = "; ".join(list(chatqueueanime))
-                print(inputqueue)
-                get_ai_answer(inputqueue, connection, event)
-                cntanime.clear()
-                print("***** resetting counter: #anime *****")
+    random_range = random.uniform(0,40)
+    print(f"random range: {random_range}")    
+    if random_range < (6):
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.0-flash-thinking-exp',
+                config=types.GenerateContentConfig(system_instruction=sys_instruct_news, tools =[google_search_tool]),
+                contents="Make up a response based on the last 10 or so requests and responses",
+                )
+            if not response.text:
+                print("*** Blank Response! ***")
+                return
+            para_text = response.text.splitlines()
+            nonempty_para_text = [line for line in para_text if line.strip()]
+            for paragraph in nonempty_para_text:
+                output = remove_lfcr(paragraph)
+                output = output[:450]
+                print("random: "+output)
+                connection.privmsg(event.target,output)        
+                time.sleep(1)
+            return
+        except errors.APIError as e:
+            print(e.code)
+            print(e.message)
+            connection.privmsg(event.target,"Random routine error!")
+            return
 
-    if event.target == "#geeks":        
-        cntgeeks.increment()
-        chatqueuegeeks.append(event.source.nick + ": " + inputtext2)
-        print(f"cntgeeks.msg: {cntgeeks.value}")
-        if cntgeeks.value > 10:
-            random_range = random.uniform(0, 40)
-            print(f"random range: {random_range}")
-            if cntgeeks.value > random_range:
-                inputqueue = "; ".join(list(chatqueuegeeks))
-                print(inputqueue)
-                get_ai_answer(inputqueue, connection, event)
-                cntgeeks.clear()
-                print("***** resetting counter: #geeks *****")
+#    if event.target == "#anime":        
+#        cntanime.increment()
+#        chatqueueanime.append(event.source.nick + ": " + inputtext2)
+#        print(f"cntanime.msg: {cntanime.value}")
+#        if cntanime.value > 10:
+#            random_range = random.uniform(0, 40)
+#            print(f"random range: {random_range}")
+#            if cntanime.value > random_range:
+#                inputqueue = "; ".join(list(chatqueueanime))
+#                print(inputqueue)
+#                get_ai_answer(inputqueue, connection, event)
+#                cntanime.clear()
+#                print("***** resetting counter: #anime *****")
+
+#    if event.target == "#geeks":        
+#        cntgeeks.increment()
+#        chatqueuegeeks.append(event.source.nick + ": " + inputtext2)
+#        print(f"cntgeeks.msg: {cntgeeks.value}")
+#        if cntgeeks.value > 10:
+#            random_range = random.uniform(0, 40)
+#            print(f"random range: {random_range}")
+#            if cntgeeks.value > random_range:
+#                inputqueue = "; ".join(list(chatqueuegeeks))
+#                print(inputqueue)
+#                get_ai_answer(inputqueue, connection, event)
+#                cntgeeks.clear()
+#                print("***** resetting counter: #geeks *****")
 
 
 
@@ -132,6 +159,8 @@ def get_ai_answer(inputtext, connection, event):
 # added 22/3/2025 14:41
 
         for i, chat in enumerate(chats):
+            print(i)
+            print(chat)
             response = chat.send_message(inputtext)
 # end of added 22/3/2025 14:41
         if not response.text:
@@ -140,7 +169,7 @@ def get_ai_answer(inputtext, connection, event):
     except errors.APIerror as e:
         print(e.code)
         print(e.message)
-        connection.privmsg(event.target,"News routine error!")
+        connection.privmsg(event.target,"Chat routine error!")
         return    
     para_text = response.text.splitlines()
     nonempty_para_text = [line for line in para_text if line.strip()]
