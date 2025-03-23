@@ -12,6 +12,7 @@ import sys
 import random
 from collections import deque
 from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
+import configparser
 
 class counter:
     def __init__(self, value):
@@ -40,11 +41,60 @@ with open('e:/ai/genai_api_key.txt') as file:
     api_key = file.read().strip()
 client = genai.Client(api_key=api_key)
 
+
+
 # IRC Server details
-SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
-PORT = 6667  # Standard IRC port
-NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
-CHANNELS = ["#geeks", "#anime"]  # Channel to join
+
+def load_config(config_file='config.ini'):
+    try:
+        config = configparser.ConfigParser()
+        config.read(config_file)
+
+        server_info = {
+            'server': config['IRCServer']['server'],
+            'port': int(config['IRCServer']['port'])
+        }
+
+        general_info = {
+            'nick': config['General']['nick']
+        }
+
+        channels_str = config['General']['channels']
+        channels_str = channels_str.strip('[]')
+        channels = [ch.strip().strip("'\"") for ch in channels_str.split(',')]
+        general_info['channels'] = channels
+    
+        return {
+            'server': server_info,
+            'general': general_info
+        }
+
+    except FileNotFoundError:
+        print(f"Error: Config file '{config_file}' not found")
+        sys.exit(1)
+    except KeyError as e:
+        print(f"Error: Missing required configuration key: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error loading configuration: {e}")
+        sys.exit(1)
+
+config = load_config()
+print("=== IRC Bot Configuration ===")
+print(f"Server: {config['server']['server']}")
+print(f"Port: {config['server']['port']}")
+print(f"Nickname: {config['general']['nick']}")
+print(f"Channels: {config['general']['channels']}")
+
+SERVER = config['server']['server']
+PORT = config['server']['port']
+NICK = config['general']['nick']
+CHANNELS = config['general']['channels']
+
+##SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
+#PORT = 6667  # Standard IRC port
+#NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
+#CHANNELS = ["#geeks", "#anime"]  # Channel to join
 
 sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
 #sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called #anime. Your name is {NICK}"
@@ -78,9 +128,32 @@ def main():
         c = reactor.server().connect(SERVER, PORT, NICK)
         c.add_global_handler("welcome", on_connect)
         c.add_global_handler("pubmsg", on_message)
+        c.add_global_handler("action",on_action)
         reactor.process_forever()
     except irc.client.ServerConnectionError:
         print("Connection error")
+
+def on_action(connection,event):
+    inputtext = event.arguments[0].strip()
+    inputtext2 = event.arguments[0].strip()
+    inputtext = "[" + event.source.nick + " " + inputtext + "]"
+    chan = event.target
+    logging(event, inputtext)
+    if inputtext.find(NICK.lower()) != -1:
+        get_ai_answer(inputtext, connection, event)
+        return
+#    if inputtext.find("cubes") != -1:
+#        get_ai_answer(inputtext, connection, event)
+#        return
+#    if inputtext.find("buffet") != -1:
+#        get_ai_answer(inputtext, connection, event)
+#        return
+#    if inputtext.find("ChatSec") != -1:
+#        get_ai_answer(inputtext, connection, event)
+#        return
+#    if event.arguments[0].find("steal") != -1:
+#        get_ai_answer(inputtext, connection, event)
+#        return
 
 def on_message(connection, event):
     inputtext = event.arguments[0].strip()
@@ -101,9 +174,10 @@ def on_message(connection, event):
     random_range = random.uniform(0,40)
     print(f"random range: {random_range}")    
     if random_range < (6):
+        print("*** Random routine has fired ***")
+        inputqueue = "; ".join(list(chatdeque[chan]))
+        print(inputqueue)
         try:
-            inputqueue = "; ".join(list(chatdeque[chan]))
-            print(inputqueue)
             get_ai_answer(inputqueue,connection,event)
             return
         except errors.APIError as e:
@@ -186,7 +260,7 @@ def logging(event, inputtext):
 def get_ai_news(event, connection):
     try:
         response = client.models.generate_content(
-        model='gemini-2.0-flash-thinking-exp',
+        model='gemini-2.0-flash',
         config=types.GenerateContentConfig(system_instruction=sys_instruct_news, tools =[google_search_tool]),
         contents="What is the latest news?",
         )
@@ -237,6 +311,9 @@ def get_ai_art(event, connection):
         connection.privmsg(event.target,output)        
         time.sleep(1)
     return
+
+
+
 
 if __name__ == "__main__":
     main()
