@@ -1,5 +1,5 @@
-# 1st argument = bot's nickname
-# 2nd argument = bot's character type - enclose in quotes if it contains spaces
+# 1st argument = config file
+# TODO: re-write fire on specific word routine to fire using words taken from config file
 
 import irc.client
 import requests
@@ -32,20 +32,13 @@ class dq:
     def __iter__(self):
         return iter(self.d)
 
-#chatqueuegeeks = dq()
-#chatqueueanime = dq()       
-#cntanime = counter(0)
-#cntgeeks = counter(0)
-
 with open('e:/ai/genai_api_key.txt') as file:
     api_key = file.read().strip()
 client = genai.Client(api_key=api_key)
 
-
-
 # IRC Server details
 
-def load_config(config_file='config.ini'):
+def load_config(config_file=sys.argv[1]):
     try:
         config = configparser.ConfigParser()
         config.read(config_file)
@@ -59,14 +52,19 @@ def load_config(config_file='config.ini'):
             'nick': config['General']['nick']
         }
 
+        specifics_info = {
+            'sysprompt': config['Specifics']['sysprompt']
+        }
         channels_str = config['General']['channels']
         channels_str = channels_str.strip('[]')
         channels = [ch.strip().strip("'\"") for ch in channels_str.split(',')]
         general_info['channels'] = channels
-    
+
+
         return {
             'server': server_info,
-            'general': general_info
+            'general': general_info,
+            'specifics': specifics_info
         }
 
     except FileNotFoundError:
@@ -85,21 +83,17 @@ print(f"Server: {config['server']['server']}")
 print(f"Port: {config['server']['port']}")
 print(f"Nickname: {config['general']['nick']}")
 print(f"Channels: {config['general']['channels']}")
+print(f"SysPrompt: {config['specifics']['sysprompt']}")
 
 SERVER = config['server']['server']
 PORT = config['server']['port']
 NICK = config['general']['nick']
 CHANNELS = config['general']['channels']
+SYSPROMPT = config['specifics']['sysprompt']
 
-##SERVER = "irc.quakenet.org"  # Change to your preferred IRC server
-#PORT = 6667  # Standard IRC port
-#NICK = sys.argv[1] if len(sys.argv) >1 else "MaidBot"  # Bot's nickname
-#CHANNELS = ["#geeks", "#anime"]  # Channel to join
-
-sys_instruct_init=f"Limit your output to 450 characters. You are {sys.argv[2]}"
-#sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called #anime. Your name is {NICK}"
-sys_instruct_news=f"You are {sys.argv[2]}.  Limit your output to 2 paragraphs each at most 450 characters."
-sys_instruct_art= f"You are {sys.argv[2]}.  Limit your output to 2 paragraphs each paragraph not more than 450 characters"
+sys_instruct_init=f"Limit your output to 450 characters. You are {SYSPROMPT}"
+sys_instruct_news=f"You are {SYSPROMPT}.  Limit your output to 2 paragraphs each at most 450 characters."
+sys_instruct_art= f"You are {SYSPROMPT}.  Limit your output to 2 paragraphs each paragraph not more than 450 characters"
 
 google_search_tool = Tool(google_search=GoogleSearch())
 
@@ -108,7 +102,7 @@ chatdeque = {}
 
 def on_connect(connection, event):
     for chan in CHANNELS:
-        sys_instruct = f"Limit your output to 450 characters. You are {sys.argv[2]}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called {chan}. Your name is {NICK}"
+        sys_instruct = f"Limit your output to 450 characters. You are {SYSPROMPT}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called {chan}. Your name is {NICK}"
         chat = client.chats.create(
                 model="gemini-2.0-flash-thinking-exp",
                 config=types.GenerateContentConfig(system_instruction=sys_instruct),                
@@ -173,7 +167,7 @@ def on_message(connection, event):
     chatdeque[chan].append(event.source.nick + ": " + inputtext2)
     random_range = random.uniform(0,40)
     print(f"random range: {random_range}")    
-    if random_range < (6):
+    if random_range < (4):
         print("*** Random routine has fired ***")
         inputqueue = "; ".join(list(chatdeque[chan]))
         print(inputqueue)
@@ -185,36 +179,6 @@ def on_message(connection, event):
             print(e.message)
             connection.privmsg(event.target,"Random routine error!")
             return
-
-#    if event.target == "#anime":        
-#        cntanime.increment()
-#        chatqueueanime.append(event.source.nick + ": " + inputtext2)
-#        print(f"cntanime.msg: {cntanime.value}")
-#        if cntanime.value > 10:
-#            random_range = random.uniform(0, 40)
-#            print(f"random range: {random_range}")
-#            if cntanime.value > random_range:
-#                inputqueue = "; ".join(list(chatqueueanime))
-#                print(inputqueue)
-#                get_ai_answer(inputqueue, connection, event)
-#                cntanime.clear()
-#                print("***** resetting counter: #anime *****")
-
-#    if event.target == "#geeks":        
-#        cntgeeks.increment()
-#        chatqueuegeeks.append(event.source.nick + ": " + inputtext2)
-#        print(f"cntgeeks.msg: {cntgeeks.value}")
-#        if cntgeeks.value > 10:
-#            random_range = random.uniform(0, 40)
-#            print(f"random range: {random_range}")
-#            if cntgeeks.value > random_range:
-#                inputqueue = "; ".join(list(chatqueuegeeks))
-#                print(inputqueue)
-#                get_ai_answer(inputqueue, connection, event)
-#                cntgeeks.clear()
-#                print("***** resetting counter: #geeks *****")
-
-
 
 def remove_lfcr(text):
     return text.replace("\n"," ").replace("\r"," ")
@@ -230,7 +194,7 @@ def get_ai_answer(inputtext, connection, event):
         if not response.text:
             print("*** Blank Response! ***")
             return
-    except errors.APIerror as e:
+    except errors.APIError as e:
         print(e.code)
         print(e.message)
         connection.privmsg(event.target,"Chat routine error!")
@@ -311,9 +275,6 @@ def get_ai_art(event, connection):
         connection.privmsg(event.target,output)        
         time.sleep(1)
     return
-
-
-
 
 if __name__ == "__main__":
     main()
