@@ -162,6 +162,9 @@ def on_message(connection, event):
         if event.arguments[0].find("!art") != -1:
             get_ai_art(event, connection)
             return
+        if event.arguments[0].find("!yt") != -1:
+            get_yt_vid(event, connection)
+            return
         get_ai_answer(inputtext, connection, event)
         return
     chatdeque[chan].append(event.source.nick + ": " + inputtext2)
@@ -226,7 +229,7 @@ def get_ai_news(event, connection):
         response = client.models.generate_content(
         model='gemini-2.0-flash',
         config=types.GenerateContentConfig(system_instruction=sys_instruct_news, tools =[google_search_tool]),
-        contents="What is the latest news?",
+        contents="What is the latest news?  Answer in character.",
         )
         if not response.text:
             print("*** Blank Response! ***")
@@ -266,6 +269,38 @@ def get_ai_art(event, connection):
         connection.privmsg(event.target,"Art routine error!")
         return
 # end of new error trapping routine
+    para_text = response.text.splitlines()
+    nonempty_para_text = [line for line in para_text if line.strip()]
+    for paragraph in nonempty_para_text:
+        output = remove_lfcr(paragraph)
+        output = output[:450]
+        print(output)
+        connection.privmsg(event.target,output)        
+        time.sleep(1)
+    return
+
+def get_yt_vid(event,connection):
+    try:
+        artlen = len(NICK) + 5
+        yt_file = event.arguments[0][artlen:]
+        response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        config=types.GenerateContentConfig(system_instruction=sys_instruct_news),
+        contents=types.Content(
+            parts=[
+                types.Part(text='Summarize this video in character'),
+                types.Part(file_data=types.FileData(file_uri=yt_file))
+                ]
+            )
+        )
+        if not response.text:
+            print("*** Blank Response! ***")
+            return
+    except errors.APIError as e:
+        print(e.code)
+        print(e.message)
+        connection.privmsg(event.target,"YT routine error!")
+        return
     para_text = response.text.splitlines()
     nonempty_para_text = [line for line in para_text if line.strip()]
     for paragraph in nonempty_para_text:
