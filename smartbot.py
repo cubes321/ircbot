@@ -136,18 +136,6 @@ def on_action(connection,event):
     if inputtext.find(NICK.lower()) != -1:
         get_ai_answer(inputtext, connection, event)
         return
-#    if inputtext.find("cubes") != -1:
-#        get_ai_answer(inputtext, connection, event)
-#        return
-#    if inputtext.find("buffet") != -1:
-#        get_ai_answer(inputtext, connection, event)
-#        return
-#    if inputtext.find("ChatSec") != -1:
-#        get_ai_answer(inputtext, connection, event)
-#        return
-#    if event.arguments[0].find("steal") != -1:
-#        get_ai_answer(inputtext, connection, event)
-#        return
 
 def on_message(connection, event):
     inputtext = event.arguments[0].strip()
@@ -164,6 +152,12 @@ def on_message(connection, event):
             return
         if event.arguments[0].find("!yt") != -1:
             get_yt_vid(event, connection)
+            return
+        if event.arguments[0].find("!animeyt") != -1:
+            get_yt_animevid(event, connection)
+            return
+        if event.arguments[0].find("!meme") != -1:
+            get_ai_meme(event, connection, chan)
             return
         get_ai_answer(inputtext, connection, event)
         return
@@ -281,6 +275,7 @@ def get_ai_art(event, connection):
 
 def get_yt_vid(event,connection):
     try:
+        connection.privmsg(event.target,"<Analysing video please wait>")
         artlen = len(NICK) + 5
         yt_file = event.arguments[0][artlen:]
         response = client.models.generate_content(
@@ -288,7 +283,7 @@ def get_yt_vid(event,connection):
         config=types.GenerateContentConfig(system_instruction=sys_instruct_news),
         contents=types.Content(
             parts=[
-                types.Part(text='Summarize this video in character'),
+                types.Part(text='Summarize this video in character.  A maximum of 3 paragraphs and 450 characters each.',),
                 types.Part(file_data=types.FileData(file_uri=yt_file))
                 ]
             )
@@ -310,6 +305,69 @@ def get_yt_vid(event,connection):
         connection.privmsg(event.target,output)        
         time.sleep(1)
     return
+
+def get_yt_animevid(event,connection):
+    print("=== YT Anime ===")
+    try:
+        connection.privmsg(event.target,"<Analysing video please wait>")
+        artlen = len(NICK) + 10
+        print(f"event: {event.arguments[0]}")
+        yt_file = event.arguments[0][artlen:]
+        print(f"YT File: {yt_file}")
+        response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        config=types.GenerateContentConfig(system_instruction=sys_instruct_news),
+        contents=types.Content(
+            parts=[
+                types.Part(text='What do you think of this anime video?  A maximum of 3 paragraphs and 450 characters each.',),
+                types.Part(file_data=types.FileData(file_uri=yt_file))
+                ]
+            )
+        )
+        if not response.text:
+            print("*** Blank Response! ***")
+            return
+    except errors.APIError as e:
+        print(e.code)
+        print(e.message)
+        connection.privmsg(event.target,"YT routine error!")
+        return
+    para_text = response.text.splitlines()
+    nonempty_para_text = [line for line in para_text if line.strip()]
+    for paragraph in nonempty_para_text:
+        output = remove_lfcr(paragraph)
+        output = output[:450]
+        print(output)
+        connection.privmsg(event.target,output)        
+        time.sleep(1)
+    return
+
+def get_ai_meme(event,connection, chan):
+    try:
+        inputqueue = "; ".join(list(chatdeque[chan]))
+        response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        config=types.GenerateContentConfig(system_instruction=sys_instruct_news),
+        contents=f"{inputqueue}.  Find a meme for this conversation.  Respond with a link along with a sentence or two about the meme.",
+        )
+        if not response.text:
+            print("*** Blank Response! ***")
+            return
+    except errors.APIError as e:
+        print(e.code)
+        print(e.message)
+        connection.privmsg(event.target,"Meme routine error!")
+        return
+    para_text = response.text.splitlines()
+    nonempty_para_text = [line for line in para_text if line.strip()]
+    for paragraph in nonempty_para_text:
+        output = remove_lfcr(paragraph)
+        output = output[:450]
+        print(output)
+        connection.privmsg(event.target,output)        
+        time.sleep(1)
+    return
+
 
 if __name__ == "__main__":
     main()
