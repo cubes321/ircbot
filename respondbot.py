@@ -100,7 +100,7 @@ chatdeque = {}
 
 def on_connect(connection, event):
     for chan in CHANNELS:
-        sys_instruct = f"On each message determine whether you should answer.  If no answer is required respond with NOANSWER. The messages are of the form '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called {chan}. Your name is {NICK}.  Limit your output to 450 characters."
+        sys_instruct = f"On each message determine whether you should answer.  If no answer is required respond with 'NOANSWER - [reason for no answer] . The messages are of the form '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called {chan}. Your name is {NICK}.  Limit your output to 450 characters."
         chat = client.chats.create(
                 model="gemini-2.0-flash-thinking-exp",
                 config=types.GenerateContentConfig(system_instruction=sys_instruct),                
@@ -131,9 +131,7 @@ def on_action(connection,event):
     inputtext = "[" + event.source.nick + " " + inputtext + "]"
     chan = event.target
     logging(event, inputtext)
-    if inputtext.find(NICK.lower()) != -1:
-        get_ai_answer(inputtext, connection, event)
-        return
+    get_ai_answer(inputtext, connection, event)
 
 def on_message(connection, event):
     inputtext = event.arguments[0].strip()
@@ -163,8 +161,8 @@ def get_ai_answer(inputtext, connection, event):
         print(e.message)
         connection.privmsg(event.target,"Chat routine error!")
         return    
-    if response.text == "NOANSWER":
-        print("No answer required.")
+    if response.text[:8] == "NOANSWER":
+        print(f"No answer required. Reason: {response.text[9:]}")
         return
     para_text = response.text.splitlines()
     nonempty_para_text = [line for line in para_text if line.strip()]
