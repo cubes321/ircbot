@@ -100,9 +100,9 @@ chatdeque = {}
 
 def on_connect(connection, event):
     for chan in CHANNELS:
-        sys_instruct = f"On each message determine whether you should answer.  If no answer is required respond with 'NOANSWER - [reason for no answer] . The messages are of the form '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called {chan}. Your name is {NICK}.  Limit your output to 450 characters."
+        sys_instruct = f"On each message determine whether you should answer.  If no answer is required respond with 'NOANSWER - [reason for no answer] . The messages are of the form '[name]: [request]'.  You don't have to use this format in your answers.  You are {SYSPROMPT}.  You are in an IRC channel called {chan}. Your name is {NICK}.  Limit your output to 450 characters. "
         chat = client.chats.create(
-                model="gemini-2.0-flash-thinking-exp",
+                model="gemini-2.0-flash",
                 config=types.GenerateContentConfig(system_instruction=sys_instruct),                
                 )
         chats[chan] = chat
