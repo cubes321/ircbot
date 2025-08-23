@@ -1,6 +1,5 @@
 # 1st argument = config file
 # TODO: re-write fire on specific word routine to fire using words taken from config file
-# TODO: add a routine to welcome users when they join the channel - DONE
 
 import irc.client
 import requests
@@ -14,6 +13,9 @@ import random
 from collections import deque
 from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
 import configparser
+import re
+import yt_dlp # <-- NEW: Imported the yt-dlp library
+import datetime # <-- NEW: Imported for formatting the duration
 
 argparse = sys.argv[0]
 if len(sys.argv) < 2:
@@ -124,7 +126,6 @@ def on_connect(connection, event):
         print(result)
         connection.privmsg(chan, result)
 
-# *** NEW ***
 # This function handles the event when a user joins a channel
 def on_join(connection, event):
     # Check if the user joining is not the bot itself
@@ -146,7 +147,6 @@ def main():
         c.add_global_handler("welcome", on_connect)         # this is the welcome message handler
         c.add_global_handler("pubmsg", on_message)          # this is the public message handler
         c.add_global_handler("action",on_action)            # this is the action handler
-        # *** NEW *** Add a handler for the 'join' event
         c.add_global_handler("join", on_join)
         reactor.process_forever()
     except irc.client.ServerConnectionError:
@@ -166,40 +166,63 @@ def on_action(connection,event):
 
 # this is the routine that handles the messages in public channels
 def on_message(connection, event):
-# setup the imput text for the AI
-    inputtext = event.arguments[0].strip()
-    inputtext2 = event.arguments[0].strip()
-    inputtext = event.source.nick + ": " + inputtext
+    # setup the input text for the AI
+    message_text = event.arguments[0]
     chan = event.target
+
+    # *** MODIFIED *** Check for YouTube links and post info, but not for AI commands
+    is_yt_command = "!yt" in message_text or "!animeyt" in message_text
+    # Regex to find youtube URLs (handles youtube.com and youtu.be)
+    yt_url_pattern = r'(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([\w-]+))'
+    match = re.search(yt_url_pattern, message_text)
+    
+    # If a URL is found AND it's not part of an AI command that already processes URLs, get the title/duration
+    if match and not (NICK.lower() in message_text.lower() and is_yt_command):
+        url = match.group(1)
+        video_info = get_youtube_video_info(url)
+        if video_info:
+            connection.privmsg(chan, video_info)
+
+    # The rest of the original on_message function follows
+    inputtext = message_text.strip()
+    inputtext2 = message_text.strip()
+    inputtext = event.source.nick + ": " + inputtext
     logging(event, inputtext)
-    # *** MODIFIED *** # Check if the message contains the bot's name anywhere, not just at the start.
-    if NICK.lower() in event.arguments[0].lower():
-# goes to the news routine if the message has !news in it
+    
+    # Check if the message contains the bot's name anywhere, not just at the start.
+    if NICK.lower() in message_text.lower():
+        # *** NEW *** Add a help command
+        if event.arguments[0].find("!help") != -1:
+            help_text = f"Commands: !news, !art <url>, !yt <url>, !animeyt <url>, !meme, !help. Talk to me by mentioning my name, {NICK}."
+            connection.privmsg(chan, help_text)
+            return
+        # goes to the news routine if the message has !news in it
         if event.arguments[0].find("!news") != -1:
             get_ai_news(event, connection)
             return
-# goes to the art routine if the message has !art in it
+        # goes to the art routine if the message has !art in it
         if event.arguments[0].find("!art") != -1:
             get_ai_art(event, connection)
             return
-# goes to the youtube routine if the message has !meme in it
+        # goes to the youtube routine if the message has !meme in it
         if event.arguments[0].find("!yt") != -1:
             get_yt_vid(event, connection)
             return
-# goes to the youtube anime routine if the message has !animeyt in it
+        # goes to the youtube anime routine if the message has !animeyt in it
         if event.arguments[0].find("!animeyt") != -1:
             get_yt_animevid(event, connection)
             return
-# goes to the meme routine if the message has !meme in it
+        # goes to the meme routine if the message has !meme in it
         if event.arguments[0].find("!meme") != -1:
             get_ai_meme(event, connection, chan)
             return
-# deals with the message if no other handlers are called
+        # deals with the message if no other handlers are called
         get_ai_answer(inputtext, connection, event)
         return
-# add the message to the deque for the channel to be used in the random routine
+        
+    # add the message to the deque for the channel to be used in the random routine
     chatdeque[chan].append(event.source.nick + ": " + inputtext2)
-# see if the bot will make a random response to a message
+    # see if the bot will make a random response to a message
     random_range = random.uniform(0,40)
     print(f"random range: {random_range}")    
     if random_range < (4):                      # this is the chance of a random response (4 is 10%)
@@ -256,7 +279,6 @@ def connect_msg():
     )
     return response.text
 
-# *** NEW ***
 # This routine generates a welcome message for a specific user.
 def welcome_msg(user_nick):
     try:
@@ -270,6 +292,37 @@ def welcome_msg(user_nick):
         print(f"Error generating welcome message: {e}")
         return f"Welcome, {user_nick}!"
 
+# This routine now uses yt-dlp to get video info, including the channel name.
+def get_youtube_video_info(url):
+    """
+    Uses yt-dlp to get the title, uploader, and duration of a YouTube video.
+    """
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'force_generic_extractor': True
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(url, download=False)
+            title = info_dict.get('title', 'Could not find title')
+            channel = info_dict.get('uploader', 'N/A')
+            duration_seconds = info_dict.get('duration', 0)
+            
+            if duration_seconds:
+                # Format the duration from seconds to H:M:S or M:S
+                td = datetime.timedelta(seconds=duration_seconds)
+                duration_str = str(td)
+            else:
+                duration_str = "N/A (likely a live stream)"
+            
+            return f"YouTube: {title} | By: {channel} | Duration: {duration_str}"
+    except yt_dlp.utils.DownloadError as e:
+        print(f"Error fetching YouTube info for {url}: {e}")
+        return "Could not retrieve info for that YouTube link."
+    except Exception as e:
+        print(f"An unexpected error occurred in get_youtube_video_info: {e}")
+        return None
 
 # this is the routine that logs the messages to the console
 def logging(event, inputtext):
