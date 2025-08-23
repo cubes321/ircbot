@@ -275,7 +275,7 @@ def connect_msg():
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         config=types.GenerateContentConfig(system_instruction=sys_instruct_init),
-        contents=f"Create a suitable joining message for an IRC channel.  Mention that you can be called by using {NICK} followed by a message.",
+        contents=f"Create a suitable joining message for an IRC channel.  Mention that you can be called by using {NICK} in the message.",
     )
     return response.text
 
