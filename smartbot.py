@@ -356,33 +356,60 @@ def get_ai_news(event, connection):
         time.sleep(1)
     return
 
-# this is the routine that gets the AI art from the image URL (jpg only)
+# this is the routine that gets the AI art from the image URL
 def get_ai_art(event, connection):
+    # A list of MIME types supported by the Gemini API for image analysis
+    # NEW: List of supported image formats
+    SUPPORTED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]
+
     artlen = len(NICK) + 6
-    print(artlen)
-    image_path = event.arguments[0][artlen:]
-    print(image_path)
+    image_url = event.arguments[0][artlen:].strip() # NEW: Added strip() to remove trailing spaces
+    print(f"Attempting to fetch image from: {image_url}")
+
     try:
-        image = requests.get(image_path) # this gets the image from the URL
+        # NEW: Added a timeout and stream=True for better handling of headers
+        image_response = requests.get(image_url, stream=True, timeout=10)
+        # NEW: Check if the request was successful
+        image_response.raise_for_status() 
+
+        # NEW: Get the MIME type from the response headers
+        mime_type = image_response.headers.get('Content-Type')
+        print(f"Detected MIME type: {mime_type}")
+
+        # NEW: Check if the detected MIME type is supported
+        if not mime_type or mime_type.split(';')[0] not in SUPPORTED_MIME_TYPES:
+            error_msg = f"Unsupported or unknown image type: {mime_type}. Please use a direct link to a JPG, PNG, or WEBP file."
+            print(error_msg)
+            connection.privmsg(event.target, error_msg)
+            return
+
+        # NEW: Read the image content now that we've checked the headers
+        image_content = image_response.content
+
     except requests.exceptions.RequestException as e:
         print(f"Error fetching image: {e}")
-        connection.privmsg(event.target,"Art routine error!")
+        connection.privmsg(event.target, "Could not fetch the image. Please check the URL.")
         return
-# version 1 18/03/2025
+
     try:
       response = client.models.generate_content(
         model="gemini-2.5-flash",
         config=types.GenerateContentConfig(system_instruction=sys_instruct_art),
         contents=["Criticise the image in the style of an art critic",
-              types.Part.from_bytes(data=image.content, mime_type="image/jpeg")]
+              # MODIFIED: Use the dynamically detected mime_type variable
+              types.Part.from_bytes(data=image_content, mime_type=mime_type)]
         )
     except errors.APIError as e:
         print(e.code)
         print(e.message)
-        connection.privmsg(event.target,"Art routine error!")
+        connection.privmsg(event.target, "Art routine error! The image may be invalid or corrupted.")
         return
-# end of new error trapping routine
-# splits the response into paragraphs and sends them to the channel with a delay of 1 second between each paragraph and a maximum of 450 characters each to avoid flooding the channel
+    except Exception as e: # NEW: Catch other potential errors during API call
+        print(f"An unexpected error occurred in get_ai_art: {e}")
+        connection.privmsg(event.target, "An unexpected error occurred while analyzing the art.")
+        return
+
+    # No changes to the response handling below
     para_text = response.text.splitlines()
     nonempty_para_text = [line for line in para_text if line.strip()]
     for paragraph in nonempty_para_text:
