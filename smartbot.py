@@ -1,5 +1,6 @@
 # 1st argument = config file
 # TODO: re-write fire on specific word routine to fire using words taken from config file
+# TODO: add a routine to welcome users when they join the channel - DONE
 
 import irc.client
 import requests
