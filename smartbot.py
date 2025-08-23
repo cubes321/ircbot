@@ -14,15 +14,14 @@ from collections import deque
 from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
 import configparser
 
-class counter:
-    def __init__(self, value):
-        self.value = value
-    def increment(self):
-        self.value += 1
-    def clear(self):
-        self.value = 0
+argparse = sys.argv[0]
+if len(sys.argv) < 2:
+    print(f"Usage: {argparse} <config_file>")
+    sys.exit(1)
 
 class dq:
+# deque for each channel of the random response routine
+# this is a deque that holds the last 10 messages in the channel
     def __init__(self):
         self.d = deque(maxlen=10)
     def append(self, x):
@@ -112,7 +111,7 @@ def on_connect(connection, event):
     for chan in CHANNELS:
         sys_instruct = f"Limit your output to 450 characters. You are {SYSPROMPT}. The request is of the format '[name]: [request]'.  You don't have to use this format in your answers.  You are in an IRC channel called {chan}. Your name is {NICK}"
         chat = client.chats.create(
-                model="gemini-2.5-flash-preview-04-17",
+                model="gemini-2.5-flash",
                 config=types.GenerateContentConfig(system_instruction=sys_instruct),                
                 )
         chats[chan] = chat
@@ -124,6 +123,20 @@ def on_connect(connection, event):
         print(result)
         connection.privmsg(chan, result)
 
+# *** NEW ***
+# This function handles the event when a user joins a channel
+def on_join(connection, event):
+    # Check if the user joining is not the bot itself
+    if event.source.nick != connection.get_nickname():
+        channel = event.target
+        user = event.source.nick
+        print(f"{user} has joined {channel}")
+        
+        # Generate and send a welcome message
+        welcome_message = welcome_msg(user)
+        welcome_message = remove_lfcr(welcome_message)
+        connection.privmsg(channel, welcome_message)
+
 # this is the main function that connects to the server and starts the bot
 def main():
     reactor = irc.client.Reactor()
@@ -132,6 +145,8 @@ def main():
         c.add_global_handler("welcome", on_connect)         # this is the welcome message handler
         c.add_global_handler("pubmsg", on_message)          # this is the public message handler
         c.add_global_handler("action",on_action)            # this is the action handler
+        # *** NEW *** Add a handler for the 'join' event
+        c.add_global_handler("join", on_join)
         reactor.process_forever()
     except irc.client.ServerConnectionError:
         print("Connection error")
@@ -156,8 +171,8 @@ def on_message(connection, event):
     inputtext = event.source.nick + ": " + inputtext
     chan = event.target
     logging(event, inputtext)
-# check if the message has the bot's name in it 
-    if event.arguments[0][:len(NICK)].lower().strip() == NICK.lower():
+    # *** MODIFIED *** # Check if the message contains the bot's name anywhere, not just at the start.
+    if NICK.lower() in event.arguments[0].lower():
 # goes to the news routine if the message has !news in it
         if event.arguments[0].find("!news") != -1:
             get_ai_news(event, connection)
@@ -234,11 +249,26 @@ def get_ai_answer(inputtext, connection, event):
 # this is the routine that gets the joining message for the channel
 def connect_msg():
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         config=types.GenerateContentConfig(system_instruction=sys_instruct_init),
         contents=f"Create a suitable joining message for an IRC channel.  Mention that you can be called by using {NICK} followed by a message.",
     )
     return response.text
+
+# *** NEW ***
+# This routine generates a welcome message for a specific user.
+def welcome_msg(user_nick):
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            config=types.GenerateContentConfig(system_instruction=sys_instruct_init),
+            contents=f"In character, create a short and friendly welcome message for the user '{user_nick}' who has just joined the channel.",
+        )
+        return response.text
+    except errors.APIError as e:
+        print(f"Error generating welcome message: {e}")
+        return f"Welcome, {user_nick}!"
+
 
 # this is the routine that logs the messages to the console
 def logging(event, inputtext):
@@ -249,7 +279,7 @@ def logging(event, inputtext):
 def get_ai_news(event, connection):
     try:
         response = client.models.generate_content(
-        model='gemini-2.0-flash',
+        model='gemini-2.5-flash',
         config=types.GenerateContentConfig(system_instruction=sys_instruct_news, tools =[google_search_tool]),
         contents="What is the latest news?  Answer in character.",
         )
@@ -278,11 +308,16 @@ def get_ai_art(event, connection):
     print(artlen)
     image_path = event.arguments[0][artlen:]
     print(image_path)
-    image = requests.get(image_path) # this gets the image from the URL
+    try:
+        image = requests.get(image_path) # this gets the image from the URL
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching image: {e}")
+        connection.privmsg(event.target,"Art routine error!")
+        return
 # version 1 18/03/2025
     try:
       response = client.models.generate_content(
-        model="gemini-2.0-flash-exp",
+        model="gemini-2.5-flash",
         config=types.GenerateContentConfig(system_instruction=sys_instruct_art),
         contents=["Criticise the image in the style of an art critic",
               types.Part.from_bytes(data=image.content, mime_type="image/jpeg")]
@@ -311,7 +346,7 @@ def get_yt_vid(event,connection):
         artlen = len(NICK) + 5
         yt_file = event.arguments[0][artlen:]
         response = client.models.generate_content(
-        model='gemini-2.0-flash',
+        model='gemini-2.5-flash',
         config=types.GenerateContentConfig(system_instruction=sys_instruct_news),
         contents=types.Content(
             parts=[
@@ -349,7 +384,7 @@ def get_yt_animevid(event,connection):
         yt_file = event.arguments[0][artlen:]
         print(f"YT File: {yt_file}")
         response = client.models.generate_content(
-        model='gemini-2.0-flash',
+        model='gemini-2.5-flash',
         config=types.GenerateContentConfig(system_instruction=sys_instruct_news),
         contents=types.Content(
             parts=[
@@ -382,7 +417,7 @@ def get_ai_meme(event,connection, chan):
     try:
         inputqueue = "; ".join(list(chatdeque[chan]))
         response = client.models.generate_content(
-        model='gemini-2.0-flash',
+        model='gemini-2.5-flash',
         config=types.GenerateContentConfig(system_instruction=sys_instruct_news),
         contents=f"{inputqueue}.  Find a meme for this conversation.  Respond with a link along with a sentence or two about the meme.",
         )
@@ -408,4 +443,3 @@ def get_ai_meme(event,connection, chan):
 
 if __name__ == "__main__":
     main()
-
