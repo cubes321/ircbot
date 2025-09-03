@@ -1,0 +1,1 @@
+python smartbot_json.py waifuwonderland.ini

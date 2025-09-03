@@ -1,0 +1,64 @@
+{
+  "Land 1: Otaku Central Station (Entrance Plaza)": {
+    "Attractions": [
+      "The Grand Waifu Parade: A daily parade featuring floats and costumed characters of the most iconic 'Best Girls.'"
+    ],
+    "Shops": [
+      "The Gacha Emporium: The park's largest store, filled with gachapon machines."
+    ],
+    "Dining": [
+      "Maid Densha Café: A classic maid café experience set inside vintage train cars. Serves themed parfaits and omurice."
+    ]
+  },
+  "Land 2: Sakura Blossom Promenade (Slice of Life & Romance)": {
+    "Rides": [
+      "The Confession Wheel: A giant Ferris wheel with cabins themed after famous anime couples.",
+      "After-School Tea Party: A spinning teacup ride set in a replica of the K-On! club room."
+    ],
+    "Experiences": [
+      "The Quintessential Quintuplets' Study Session: An escape-room-style challenge."
+    ],
+    "Shows": [
+      "Idol Stage Starlight: A concert hall with holographic performances from anime idol groups."
+    ],
+    "Dining": [
+      "Sakuragaoka High Cafeteria: Serves idealized Japanese school lunches."
+    ]
+  },
+  "Land 3: Isekai Meadows (Fantasy & RPG)": {
+    "Rides": [
+      "Subaru's 'Return by Death' Experience: A 4D dark ride that simulates the traumatic loops of Re:Zero with jolts and resets.",
+      "Konosuba's Useless Quest: A chaotic boat ride where everything comically malfunctions.",
+      "Rimuru's Great Forest Flight: A 'Soarin'' style simulator that lets you fly over the world of That Time I Got Reincarnated as a Slime."
+    ],
+    "Experiences": [
+      "The Adventurer's Guild Hall: A hub where guests can take on mini-quests."
+    ],
+    "Dining": [
+      "Tavern of the Shield Hero: A rustic tavern serving hearty, oversized meals."
+    ]
+  },
+  "Land 4: Neo-Kyoto Skyline (Sci-Fi & Mecha)": {
+    "Rides": [
+      "Gundam G-Force: The Colony Drop: A high-speed electromagnetic launch roller coaster that simulates a mecha battle in space.",
+      "Evangelion: Angel Attack Protocol: A motion simulator that places you in the entry plug of an EVA unit to battle an Angel.",
+      "Psycho-Pass: Dominator Enforcement: An interactive dark ride where you use a prop Dominator to tag targets."
+    ],
+    "Dining": [
+      "Tachikoma's Noodle Bar: A futuristic noodle bar with automated robot delivery."
+    ]
+  },
+  "Land 5: Shonen Spirit Summit (Action & Adventure)": {
+    "Rides": [
+      "Demon Slayer: Hinokami Kagura River Run: A log flume ride following Tanjiro's journey, ending in a massive splashdown.",
+      "Attack on Titan: The Wall Drop: A terrifyingly tall drop tower themed after Wall Maria."
+    ],
+    "Shows": [
+      "My Hero Academia: Hero vs. Villain Showdown: A live-action stunt show with pyrotechnics and simulated 'Quirk' battles."
+    ],
+    "Dining": [
+      "Ichiraku Ramen: A perfect recreation of Naruto's favourite ramen shop.",
+      "Senku's Stone World BBQ: A primitive-style BBQ joint serving food cooked over open wood fires."
+    ]
+  }
+}
