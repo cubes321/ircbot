@@ -16,15 +16,40 @@ import re
 import yt_dlp
 import datetime
 
-argparse = sys.argv[0]
+# Constants
+MAX_DEQUE_LEN = 10
+RANDOM_RESPONSE_RANGE = 4
+YOUTUBE_URL_PATTERN = r'(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([\w-]+))'
+SUPPORTED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]
+MODEL_NAME = "gemini-2.5-flash"
+GOOGLE_SEARCH_TOOL = Tool(google_search=GoogleSearch())
+
+script_name = sys.argv[0]
 if len(sys.argv) < 2:
-    print(f"Usage: {argparse} <config_file>")
+    print(f"Usage: {script_name} <config_file>")
     sys.exit(1)
 
-class dq:
+def remove_lfcr(text):
+    return text.replace("\n"," ").replace("\r"," ")
+
+def send_message(connection, event, response):
+    paragraph_text = response.text.splitlines()
+    non_empty_paragraph_text = [line for line in paragraph_text if line.strip()]
+    for paragraph in non_empty_paragraph_text:
+        output = remove_lfcr(paragraph)
+        output = output[:450]
+        print(f"--> Sending to {event.target}: {output}")
+        connection.privmsg(event.target,output)
+        time.sleep(1)
+
+def handle_api_error(connection, event, e, routine_name):
+    print(f"API Error in {routine_name}: {e}")
+    connection.privmsg(event.target,f"{routine_name} routine error!")
+
+class ChatQueue:
     # deque for each channel of the random response routine
     def __init__(self):
-        self.d = deque(maxlen=10)
+        self.d = deque(maxlen=MAX_DEQUE_LEN)
     def append(self, x):
         self.d.append(x)
     def count(self, x):
@@ -101,94 +126,147 @@ CHANNELS = config['general']['channels']
 SYSPROMPT = config['specifics']['sysprompt']
 
 # Setup the system prompt and instructions
-sys_instruct_init=f"Limit your output to 450 characters. You are {SYSPROMPT}"
-sys_instruct_news=f"You are {SYSPROMPT}. Limit your output to 2 paragraphs each at most 450 characters."
-sys_instruct_art= f"You are {SYSPROMPT}. Limit your output to 2 paragraphs each paragraph not more than 450 characters"
+system_instruction_init=f"Limit your output to 450 characters. You are {SYSPROMPT}"
+system_instruction_news=f"You are {SYSPROMPT}. Limit your output to 2 paragraphs each at most 450 characters."
+system_instruction_art= f"You are {SYSPROMPT}. Limit your output to 2 paragraphs each paragraph not more than 450 characters"
 
-# Setup the Google Search tool
-google_search_tool = Tool(google_search=GoogleSearch())
+final_system_prompt = "" # Will be populated in on_connect
 
-chats = {}
-chatdeque = {}
-final_sysprompt = "" # Will be populated in on_connect
+class Bot:
+    def __init__(self):
+        self.chats = {}
+        self.chat_queue = {}
+        self.final_system_prompt = ""
 
-# --- MODIFIED: Updated on_connect function ---
-def on_connect(connection, event):
-    # This message is crucial. If you don't see it, the bot never fully connected.
-    print("--> Server welcome received! Now preparing to join channels...")
+    # --- MODIFIED: Updated on_connect function ---
+    def on_connect(self, connection, event):
+        # This message is crucial. If you don't see it, the bot never fully connected.
+        print("--> Server welcome received! Now preparing to join channels...")
 
-    global final_sysprompt
-    try:
-        print(f"--> Loading park database from: {config['specifics']['database_file']}")
-        with open(config['specifics']['database_file'], 'r', encoding='utf-8') as f:
-            park_data = json.load(f)
+        global final_system_prompt
+        try:
+            print(f"--> Loading park database from: {config['specifics']['database_file']}")
+            with open(config['specifics']['database_file'], 'r', encoding='utf-8') as f:
+                park_data = json.load(f)
 
-        database_string = "\n\nPARK DATABASE\n\n"
-        for land, details in park_data.items():
-            database_string += f"[{land}]\n"
-            for category, items in details.items():
-                for item in items:
-                    database_string += f"    {category.rstrip('s')}: {item}\n"
-            database_string += "\n"
-        print("--> Park database loaded and formatted successfully.")
+            database_string = "\n\nPARK DATABASE\n\n"
+            for land, details in park_data.items():
+                database_string += f"[{land}]\n"
+                for category, items in details.items():
+                    for item in items:
+                        database_string += f"    {category.rstrip('s')}: {item}\n"
+                database_string += "\n"
+            print("--> Park database loaded and formatted successfully.")
 
-    except FileNotFoundError:
-        print(f"!!! FATAL ERROR: Database file not found at {config['specifics']['database_file']}")
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        print(f"!!! FATAL ERROR: Could not parse the JSON in {config['specifics']['database_file']}. Error: {e}")
-        sys.exit(1)
+        except FileNotFoundError:
+            print(f"!!! FATAL ERROR: Database file not found at {config['specifics']['database_file']}")
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            print(f"!!! FATAL ERROR: Could not parse the JSON in {config['specifics']['database_file']}. Error: {e}")
+            sys.exit(1)
 
-    base_prompt = SYSPROMPT
-    final_sysprompt = base_prompt + database_string
+        base_prompt = SYSPROMPT
+        self.final_system_prompt = base_prompt + database_string
+        final_system_prompt = self.final_system_prompt
 
-    for chan in CHANNELS:
-        sys_instruct = f"Limit your output to 450 characters. You are in an IRC channel called {chan}. Your name is {NICK}. Here are your instructions and data:\n{final_sysprompt}"
-        chat = client.chats.create(
-                model="gemini-2.5-flash",
-                config=types.GenerateContentConfig(system_instruction=sys_instruct),
-                )
-        chats[chan] = chat
-        chatdeque[chan] = dq()
-        print(f"--> Sending JOIN command for channel: {chan}")
-        connection.join(chan)
-        result = connect_msg()
-        result = remove_lfcr(result)
-        print(f"--> Sending welcome message to {chan}")
-        connection.privmsg(chan, result)
+        for channel in CHANNELS:
+            sys_instruct = f"Limit your output to 450 characters. You are in an IRC channel called {channel}. Your name is {NICK}. Here are your instructions and data:\n{self.final_system_prompt}"
+            chat = client.chats.create(
+                    model=MODEL_NAME,
+                    config=types.GenerateContentConfig(system_instruction=sys_instruct),
+                    )
+            self.chats[channel] = chat
+            self.chat_queue[channel] = ChatQueue()
+            print(f"--> Sending JOIN command for channel: {channel}")
+            connection.join(channel)
+            result = create_connect_message()
+            result = remove_lfcr(result)
+            print(f"--> Sending welcome message to {channel}")
+            connection.privmsg(channel, result)
 
-def on_join(connection, event):
-    if event.source.nick != connection.get_nickname():
+    def on_join(self, connection, event):
+        if event.source.nick != connection.get_nickname():
+            channel = event.target
+            user = event.source.nick
+            print(f"--> {user} has joined {channel}")
+
+            welcome_message = create_welcome_message(user)
+            welcome_message = remove_lfcr(welcome_message)
+            connection.privmsg(channel, welcome_message)
+
+    # --- NEW FUNCTION TO CATCH DISCONNECTIONS ---
+    def on_disconnect(self, connection, event):
+        print(f"!!! DISCONNECTED from the server. Reason: {' '.join(event.arguments)}")
+        # Optionally, you could add logic here to try and reconnect.
+
+    # --- NEW FUNCTION FOR ADVANCED DEBUGGING ---
+    # This will print every single message the server sends to the bot.
+    def on_raw_message(self, connection, event):
+        print(f"<- RAW: {event.source} {event.type} {event.target} {' '.join(event.arguments)}")
+
+    def on_action(self, connection,event):
+        input_text = event.arguments[0].strip()
+        input_text_2 = event.arguments[0].strip()
+        input_text = "[" + event.source.nick + " " + input_text + "]"
         channel = event.target
-        user = event.source.nick
-        print(f"--> {user} has joined {channel}")
+        log_message(event, input_text)
+        if input_text.find(NICK.lower()) != -1:
+            get_ai_answer(input_text, connection, event)
+            return
 
-        welcome_message = welcome_msg(user)
-        welcome_message = remove_lfcr(welcome_message)
-        connection.privmsg(channel, welcome_message)
+    def on_message(self, connection, event):
+        message_text = event.arguments[0]
+        channel = event.target
 
-# --- NEW FUNCTION TO CATCH DISCONNECTIONS ---
-def on_disconnect(connection, event):
-    print(f"!!! DISCONNECTED from the server. Reason: {' '.join(event.arguments)}")
-    # Optionally, you could add logic here to try and reconnect.
+        is_yt_command = "!yt" in message_text or "!animeyt" in message_text
+        match = re.search(YOUTUBE_URL_PATTERN, message_text)
 
-# --- NEW FUNCTION FOR ADVANCED DEBUGGING ---
-# This will print every single message the server sends to the bot.
-def on_raw_message(connection, event):
-    print(f"<- RAW: {event.source} {event.type} {event.target} {' '.join(event.arguments)}")
+        if match and not (NICK.lower() in message_text.lower() and is_yt_command):
+            url = match.group(1)
+            video_info = get_youtube_video_info(url)
+            if video_info:
+                connection.privmsg(channel, video_info)
+
+        input_text = message_text.strip()
+        input_text_2 = message_text.strip()
+        input_text = event.source.nick + ": " + input_text
+        log_message(event, input_text)
+
+        if NICK.lower() in message_text.lower():
+            if not process_command(event, connection):
+                get_ai_answer(input_text, connection, event)
+            return
+
+        self.chat_queue[channel].append(event.source.nick + ": " + input_text_2)
+        random_number = random.uniform(0,40)
+        print(f"random number: {random_number}")
+        if random_number < (RANDOM_RESPONSE_RANGE):
+            print("*** Random routine has fired ***")
+            input_queue = "; ".join(list(self.chat_queue[channel]))
+            print(input_queue)
+            try:
+                get_ai_answer(input_queue,connection,event)
+                return
+            except errors.APIError as e:
+                print(e.code)
+                print(e.message)
+                connection.privmsg(event.target,"Random routine error!")
+                return
+
 
 # --- MODIFIED: Updated main function ---
 def main():
     reactor = irc.client.Reactor()
+    bot = Bot()
     try:
         print(f"--> Attempting to connect to {SERVER}:{PORT} as {NICK}...")
         c = reactor.server().connect(SERVER, PORT, NICK)
 
-        c.add_global_handler("welcome", on_connect)
-        c.add_global_handler("pubmsg", on_message)
-        c.add_global_handler("action",on_action)
-        c.add_global_handler("join", on_join)
-        c.add_global_handler("disconnect", on_disconnect) # <-- NEW
+        c.add_global_handler("welcome", bot.on_connect)
+        c.add_global_handler("pubmsg", bot.on_message)
+        c.add_global_handler("action", bot.on_action)
+        c.add_global_handler("join", bot.on_join)
+        c.add_global_handler("disconnect", bot.on_disconnect) # <-- NEW
         # c.add_global_handler("all_events", on_raw_message) # <-- UNCOMMENT FOR VERY VERBOSE DEBUGGING
 
         print("--> Waiting for the server to welcome us...")
@@ -200,86 +278,14 @@ def main():
         print(f"An unexpected error occurred in main(): {e}")
         sys.exit(1)
 
-
-def on_action(connection,event):
-    inputtext = event.arguments[0].strip()
-    inputtext2 = event.arguments[0].strip()
-    inputtext = "[" + event.source.nick + " " + inputtext + "]"
-    chan = event.target
-    logging(event, inputtext)
-    if inputtext.find(NICK.lower()) != -1:
-        get_ai_answer(inputtext, connection, event)
-        return
-
-def on_message(connection, event):
-    message_text = event.arguments[0]
-    chan = event.target
-
-    is_yt_command = "!yt" in message_text or "!animeyt" in message_text
-    yt_url_pattern = r'(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([\w-]+))'
-    match = re.search(yt_url_pattern, message_text)
-
-    if match and not (NICK.lower() in message_text.lower() and is_yt_command):
-        url = match.group(1)
-        video_info = get_youtube_video_info(url)
-        if video_info:
-            connection.privmsg(chan, video_info)
-
-    inputtext = message_text.strip()
-    inputtext2 = message_text.strip()
-    inputtext = event.source.nick + ": " + inputtext
-    logging(event, inputtext)
-
-    if NICK.lower() in message_text.lower():
- #       if event.arguments[0].find("!help") != -1:
- #           help_text = f"Commands: !news, !art <url>, !yt <url>, !animeyt <url>, !meme, !help. Talk to me by mentioning my name, {NICK}."
- #           connection.privmsg(chan, help_text)
- #           return
-        if event.arguments[0].find("!news") != -1:
-            get_ai_news(event, connection)
-            return
-        if event.arguments[0].find("!art") != -1:
-            get_ai_art(event, connection)
-            return
-        if event.arguments[0].find("!yt") != -1:
-            get_yt_vid(event, connection)
-            return
-        if event.arguments[0].find("!animeyt") != -1:
-            get_yt_animevid(event, connection)
-            return
-        if event.arguments[0].find("!meme") != -1:
-            get_ai_meme(event, connection, chan)
-            return
-        get_ai_answer(inputtext, connection, event)
-        return
-
-    chatdeque[chan].append(event.source.nick + ": " + inputtext2)
-    random_range = random.uniform(0,40)
-    print(f"random range: {random_range}")
-    if random_range < (4):
-        print("*** Random routine has fired ***")
-        inputqueue = "; ".join(list(chatdeque[chan]))
-        print(inputqueue)
-        try:
-            get_ai_answer(inputqueue,connection,event)
-            return
-        except errors.APIError as e:
-            print(e.code)
-            print(e.message)
-            connection.privmsg(event.target,"Random routine error!")
-            return
-
-def remove_lfcr(text):
-    return text.replace("\n"," ").replace("\r"," ")
-
-def get_ai_answer(inputtext, connection, event):
+def get_ai_answer(input_text, connection, event):
     try:
-        chan = event.target
-        if chan in chats:
-            # Use the globally defined final_sysprompt for context if needed, though chat object retains it
-            response = chats[chan].send_message(inputtext)
+        channel = event.target
+        if channel in chats:
+            # Use the globally defined final_system_prompt for context if needed, though chat object retains it
+            response = chats[channel].send_message(input_text)
         else:
-            print(f"Error: No chat instance for channel {chan}")
+            print(f"Error: No chat instance for channel {channel}")
             return
         if not response.text:
             print("*** Blank Response! ***")
@@ -288,9 +294,9 @@ def get_ai_answer(inputtext, connection, event):
         print(f"API Error in get_ai_answer: {e}")
         connection.privmsg(event.target,"Chat routine error!")
         return
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
+    paragraph_text = response.text.splitlines()
+    non_empty_paragraph_text = [line for line in paragraph_text if line.strip()]
+    for paragraph in non_empty_paragraph_text:
         output = remove_lfcr(paragraph)
         output = output[:450]
         print(f"--> Sending to {event.target}: {output}")
@@ -298,20 +304,20 @@ def get_ai_answer(inputtext, connection, event):
         time.sleep(1)
     return
 
-def connect_msg():
+def create_connect_message():
     # This prompt is now simpler as the main context is in the chat object
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        config=types.GenerateContentConfig(system_instruction=final_sysprompt),
+        model=MODEL_NAME,
+        config=types.GenerateContentConfig(system_instruction=final_system_prompt),
         contents=f"In character, create a suitable joining message for an IRC channel. Mention that you can be called by using {NICK} in the message.",
     )
     return response.text
 
-def welcome_msg(user_nick):
+def create_welcome_message(user_nick):
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            config=types.GenerateContentConfig(system_instruction=final_sysprompt),
+            model=MODEL_NAME,
+            config=types.GenerateContentConfig(system_instruction=final_system_prompt),
             contents=f"In character, create a short and friendly welcome message for the user '{user_nick}' who has just joined the channel.",
         )
         return response.text
@@ -340,37 +346,45 @@ def get_youtube_video_info(url):
         print(f"An unexpected error occurred in get_youtube_video_info: {e}")
         return None
 
-def logging(event, inputtext):
-    print(event.target + ":" + event.source.nick + ": " + inputtext)
+def log_message(event, input_text):
+    print(event.target + ":" + event.source.nick + ": " + input_text)
+
+def process_command(event, connection):
+    command = event.arguments[0].split(" ")[0]
+    if command == "!news":
+        get_ai_news(event, connection)
+        return True
+    if command == "!art":
+        get_ai_art(event, connection)
+        return True
+    if command == "!yt":
+        get_yt_vid(event, connection)
+        return True
+    if command == "!animeyt":
+        get_yt_animevid(event, connection)
+        return True
+    if command == "!meme":
+        get_ai_meme(event, connection, event.target)
+        return True
+    return False
 
 def get_ai_news(event, connection):
     try:
         response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        config=types.GenerateContentConfig(system_instruction=sys_instruct_news, tools =[google_search_tool]),
+        model=MODEL_NAME,
+        config=types.GenerateContentConfig(system_instruction=system_instruction_news, tools =[GOOGLE_SEARCH_TOOL]),
         contents="What is the latest news? Answer in character.",
         )
         if not response.text:
             print("*** Blank Response! ***")
             return
+        send_message(connection, event, response)
     except errors.APIError as e:
-        print(f"API Error in get_ai_news: {e}")
-        connection.privmsg(event.target,"News routine error!")
-        return
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
-        output = remove_lfcr(paragraph)
-        output = output[:450]
-        print(f"--> Sending to {event.target}: {output}")
-        connection.privmsg(event.target,output)
-        time.sleep(1)
-    return
+        handle_api_error(connection, event, e, "News")
 
 def get_ai_art(event, connection):
-    SUPPORTED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]
-    artlen = len(NICK) + 6
-    image_url = event.arguments[0][artlen:].strip()
+    art_length = len(NICK) + 6
+    image_url = event.arguments[0][art_length:].strip()
     print(f"Attempting to fetch image from: {image_url}")
 
     try:
@@ -392,118 +406,77 @@ def get_ai_art(event, connection):
 
     try:
       response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        config=types.GenerateContentConfig(system_instruction=sys_instruct_art),
+        model=MODEL_NAME,
+        config=types.GenerateContentConfig(system_instruction=system_instruction_art),
         contents=["Criticise the image in the style of an art critic",
               types.Part.from_bytes(data=image_content, mime_type=mime_type)]
         )
+      send_message(connection, event, response)
     except errors.APIError as e:
-        print(f"API Error in get_ai_art: {e}")
-        connection.privmsg(event.target, "Art routine error! The image may be invalid or corrupted.")
-        return
+        handle_api_error(connection, event, e, "Art")
     except Exception as e:
         print(f"An unexpected error occurred in get_ai_art: {e}")
         connection.privmsg(event.target, "An unexpected error occurred while analyzing the art.")
         return
 
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
-        output = remove_lfcr(paragraph)
-        output = output[:450]
-        print(f"--> Sending to {event.target}: {output}")
-        connection.privmsg(event.target,output)
-        time.sleep(1)
-    return
-
 def get_yt_vid(event,connection):
     try:
         connection.privmsg(event.target,"<Analysing video please wait>")
-        artlen = len(NICK) + 5
-        yt_file = event.arguments[0][artlen:]
+        art_length = len(NICK) + 5
+        youtube_file = event.arguments[0][art_length:]
         response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        config=types.GenerateContentConfig(system_instruction=sys_instruct_news),
+        model=MODEL_NAME,
+        config=types.GenerateContentConfig(system_instruction=system_instruction_news),
         contents=types.Content(
             parts=[
                 types.Part(text='Summarize this video in character. A maximum of 3 paragraphs and 450 characters each.',),
-                types.Part(file_data=types.FileData(file_uri=yt_file))
+                types.Part(file_data=types.FileData(file_uri=youtube_file))
                 ]
             )
         )
         if not response.text:
             print("*** Blank Response! ***")
             return
+        send_message(connection, event, response)
     except errors.APIError as e:
-        print(f"API Error in get_yt_vid: {e}")
-        connection.privmsg(event.target,"YT routine error!")
-        return
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
-        output = remove_lfcr(paragraph)
-        output = output[:450]
-        print(f"--> Sending to {event.target}: {output}")
-        connection.privmsg(event.target,output)
-        time.sleep(1)
-    return
+        handle_api_error(connection, event, e, "YT")
 
 def get_yt_animevid(event,connection):
     try:
         connection.privmsg(event.target,"<Analysing video please wait>")
-        artlen = len(NICK) + 10
-        yt_file = event.arguments[0][artlen:]
+        art_length = len(NICK) + 10
+        youtube_file = event.arguments[0][art_length:]
         response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        config=types.GenerateContentConfig(system_instruction=sys_instruct_news),
+        model=MODEL_NAME,
+        config=types.GenerateContentConfig(system_instruction=system_instruction_news),
         contents=types.Content(
             parts=[
                 types.Part(text='What do you think of this anime video? A maximum of 3 paragraphs and 450 characters each.',),
-                types.Part(file_data=types.FileData(file_uri=yt_file))
+                types.Part(file_data=types.FileData(file_uri=youtube_file))
                 ]
             )
         )
         if not response.text:
             print("*** Blank Response! ***")
             return
+        send_message(connection, event, response)
     except errors.APIError as e:
-        print(f"API Error in get_yt_animevid: {e}")
-        connection.privmsg(event.target,"YT routine error!")
-        return
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
-        output = remove_lfcr(paragraph)
-        output = output[:450]
-        print(f"--> Sending to {event.target}: {output}")
-        connection.privmsg(event.target,output)
-        time.sleep(1)
-    return
+        handle_api_error(connection, event, e, "YT")
 
-def get_ai_meme(event,connection, chan):
+def get_ai_meme(event,connection, channel):
     try:
-        inputqueue = "; ".join(list(chatdeque[chan]))
+        input_queue = "; ".join(list(chat_queue[channel]))
         response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        config=types.GenerateContentConfig(system_instruction=sys_instruct_news),
-        contents=f"{inputqueue}. Find a meme for this conversation. Respond with a link along with a sentence or two about the meme.",
+        model=MODEL_NAME,
+        config=types.GenerateContentConfig(system_instruction=system_instruction_news),
+        contents=f"{input_queue}. Find a meme for this conversation. Respond with a link along with a sentence or two about the meme.",
         )
         if not response.text:
             print("*** Blank Response! ***")
             return
+        send_message(connection, event, response)
     except errors.APIError as e:
-        print(f"API Error in get_ai_meme: {e}")
-        connection.privmsg(event.target,"Meme routine error!")
-        return
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
-        output = remove_lfcr(paragraph)
-        output = output[:450]
-        print(f"--> Sending to {event.target}: {output}")
-        connection.privmsg(event.target,output)
-        time.sleep(1)
-    return
+        handle_api_error(connection, event, e, "Meme")
 
 
 if __name__ == "__main__":
