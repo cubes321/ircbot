@@ -35,6 +35,10 @@ class dq:
         return iter(self.d)
 
 # Load the API key from a file
+# It is recommended to load the API key from an environment variable for better security.
+# For example:
+# import os
+# api_key = os.environ.get("GENAI_API_KEY")
 with open('e:/ai/genai_api_key.txt') as file:
     api_key = file.read().strip()
 client = genai.Client(api_key=api_key)
@@ -191,34 +195,47 @@ def on_message(connection, event):
     
     # Check if the message contains the bot's name anywhere, not just at the start.
     if NICK.lower() in message_text.lower():
-        # *** NEW *** Add a help command
-        if event.arguments[0].find("!help") != -1:
+        msg = message_text.strip()
+        # remove nick from beginning of message, if it's there
+        if msg.lower().startswith(NICK.lower()):
+            msg = msg[len(NICK):].lstrip(':, ')
+
+        parts = msg.split(maxsplit=1)
+        command = parts[0]
+        args = parts[1] if len(parts) > 1 else ""
+
+        if command == "!help":
             help_text = f"Commands: !news, !art <url>, !yt <url>, !animeyt <url>, !meme, !help. Talk to me by mentioning my name, {NICK}."
             connection.privmsg(chan, help_text)
             return
-        # goes to the news routine if the message has !news in it
-        if event.arguments[0].find("!news") != -1:
+        elif command == "!news":
             get_ai_news(event, connection)
             return
-        # goes to the art routine if the message has !art in it
-        if event.arguments[0].find("!art") != -1:
-            get_ai_art(event, connection)
+        elif command == "!art":
+            if not args:
+                connection.privmsg(chan, "Please provide an image URL for the !art command.")
+            else:
+                get_ai_art(event, connection, args)
             return
-        # goes to the youtube routine if the message has !meme in it
-        if event.arguments[0].find("!yt") != -1:
-            get_yt_vid(event, connection)
+        elif command == "!yt":
+            if not args:
+                connection.privmsg(chan, "Please provide a YouTube URL for the !yt command.")
+            else:
+                get_yt_vid(event, connection, args)
             return
-        # goes to the youtube anime routine if the message has !animeyt in it
-        if event.arguments[0].find("!animeyt") != -1:
-            get_yt_animevid(event, connection)
+        elif command == "!animeyt":
+            if not args:
+                connection.privmsg(chan, "Please provide a YouTube URL for the !animeyt command.")
+            else:
+                get_yt_animevid(event, connection, args)
             return
-        # goes to the meme routine if the message has !meme in it
-        if event.arguments[0].find("!meme") != -1:
+        elif command == "!meme":
             get_ai_meme(event, connection, chan)
             return
-        # deals with the message if no other handlers are called
-        get_ai_answer(inputtext, connection, event)
-        return
+        else:
+            # deals with the message if no other handlers are called
+            get_ai_answer(inputtext, connection, event)
+            return
         
     # add the message to the deque for the channel to be used in the random routine
     chatdeque[chan].append(event.source.nick + ": " + inputtext2)
@@ -235,12 +252,25 @@ def on_message(connection, event):
         except errors.APIError as e:
             print(e.code)
             print(e.message)
-            connection.privmsg(event.target,"Random routine error!")
+            connection.privmsg(event.target,"An error occurred in the random response routine.")
             return
 
 # this is the routine that removes line feeds and carriage returns from the text
 def remove_lfcr(text):
     return text.replace("\n"," ").replace("\r"," ")
+
+
+def send_message_to_channel(connection, target, text):
+    """Splits a string into paragraphs, limits their length, and sends them to the target channel."""
+    para_text = text.splitlines()
+    nonempty_para_text = [line for line in para_text if line.strip()]
+    for paragraph in nonempty_para_text:
+        output = remove_lfcr(paragraph)
+        output = output[:450]
+        print(output)
+        connection.privmsg(target, output)
+        time.sleep(1)
+
 
 # this is the routine that gets the AI answer to the question
 def get_ai_answer(inputtext, connection, event):
@@ -257,17 +287,9 @@ def get_ai_answer(inputtext, connection, event):
     except errors.APIError as e:
         print(e.code)
         print(e.message)
-        connection.privmsg(event.target,"Chat routine error!")
+        connection.privmsg(event.target,"An error occurred while processing your request.")
         return    
-# splits the response into paragraphs and sends them to the channel with a delay of 1 second between each paragraph and a maximum of 450 characters each to avoid flooding the channel
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
-        output = remove_lfcr(paragraph)
-        output = output[:450]
-        print(output)
-        connection.privmsg(event.target,output)        
-        time.sleep(1)
+    send_message_to_channel(connection, event.target, response.text)
     return
 
 # this is the routine that gets the joining message for the channel
@@ -343,52 +365,49 @@ def get_ai_news(event, connection):
     except errors.APIError as e:
         print(e.code)
         print(e.message)
-        connection.privmsg(event.target,"News routine error!")
+        connection.privmsg(event.target,"An error occurred while fetching the news.")
         return
-# splits the response into paragraphs and sends them to the channel with a delay of 1 second between each paragraph and a maximum of 450 characters each to avoid flooding the channel
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
-        output = remove_lfcr(paragraph)
-        output = output[:450]
-        print(output)
-        connection.privmsg(event.target,output)        
-        time.sleep(1)
+    send_message_to_channel(connection, event.target, response.text)
     return
 
 # this is the routine that gets the AI art from the image URL
-def get_ai_art(event, connection):
+def get_ai_art(event, connection, image_url):
     # A list of MIME types supported by the Gemini API for image analysis
     # NEW: List of supported image formats
     SUPPORTED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]
 
-    artlen = len(NICK) + 6
-    image_url = event.arguments[0][artlen:].strip() # NEW: Added strip() to remove trailing spaces
     print(f"Attempting to fetch image from: {image_url}")
 
     try:
-        # NEW: Added a timeout and stream=True for better handling of headers
         image_response = requests.get(image_url, stream=True, timeout=10)
-        # NEW: Check if the request was successful
-        image_response.raise_for_status() 
+        image_response.raise_for_status()
 
-        # NEW: Get the MIME type from the response headers
+        # Check content length to prevent downloading overly large files.
+        content_length_str = image_response.headers.get('Content-Length')
+        max_size = 5 * 1024 * 1024  # 5 MB
+        if content_length_str and int(content_length_str) > max_size:
+            connection.privmsg(event.target, f"The image is too large. Please use an image under {max_size / 1024 / 1024}MB.")
+            return
+
+        # Check MIME type from headers
         mime_type = image_response.headers.get('Content-Type')
-        print(f"Detected MIME type: {mime_type}")
-
-        # NEW: Check if the detected MIME type is supported
         if not mime_type or mime_type.split(';')[0] not in SUPPORTED_MIME_TYPES:
             error_msg = f"Unsupported or unknown image type: {mime_type}. Please use a direct link to a JPG, PNG, or WEBP file."
-            print(error_msg)
             connection.privmsg(event.target, error_msg)
             return
 
-        # NEW: Read the image content now that we've checked the headers
-        image_content = image_response.content
+        # Download the content chunk by chunk to avoid memory issues if Content-Length is missing
+        image_content = b''
+        for chunk in image_response.iter_content(chunk_size=8192):
+            image_content += chunk
+            if len(image_content) > max_size:
+                connection.privmsg(event.target, f"The image is too large. Please use an image under {max_size / 1024 / 1024}MB.")
+                image_response.close() # Close the connection
+                return
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching image: {e}")
-        connection.privmsg(event.target, "Could not fetch the image. Please check the URL.")
+        connection.privmsg(event.target, "Could not fetch the image. Please check the URL and try again.")
         return
 
     try:
@@ -402,30 +421,20 @@ def get_ai_art(event, connection):
     except errors.APIError as e:
         print(e.code)
         print(e.message)
-        connection.privmsg(event.target, "Art routine error! The image may be invalid or corrupted.")
+        connection.privmsg(event.target, "An error occurred while analyzing the art. The image may be invalid or corrupted.")
         return
     except Exception as e: # NEW: Catch other potential errors during API call
         print(f"An unexpected error occurred in get_ai_art: {e}")
         connection.privmsg(event.target, "An unexpected error occurred while analyzing the art.")
         return
 
-    # No changes to the response handling below
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
-        output = remove_lfcr(paragraph)
-        output = output[:450]
-        print(output)
-        connection.privmsg(event.target,output)        
-        time.sleep(1)
+    send_message_to_channel(connection, event.target, response.text)
     return
 
 # this is the routine that gets a repsonse for a youtube video URL  
-def get_yt_vid(event,connection):
+def get_yt_vid(event,connection, yt_file):
     try:
         connection.privmsg(event.target,"<Analysing video please wait>")
-        artlen = len(NICK) + 5
-        yt_file = event.arguments[0][artlen:]
         response = client.models.generate_content(
         model='gemini-2.5-flash',
         config=types.GenerateContentConfig(system_instruction=sys_instruct_news),
@@ -442,27 +451,16 @@ def get_yt_vid(event,connection):
     except errors.APIError as e:
         print(e.code)
         print(e.message)
-        connection.privmsg(event.target,"YT routine error!")
+        connection.privmsg(event.target,"An error occurred while analyzing the video.")
         return
-# splits the response into paragraphs and sends them to the channel with a delay of 1 second between each paragraph and a maximum of 450 characters each to avoid flooding the channel  
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
-        output = remove_lfcr(paragraph)
-        output = output[:450]
-        print(output)
-        connection.privmsg(event.target,output)        
-        time.sleep(1)
+    send_message_to_channel(connection, event.target, response.text)
     return
 
 # this is the routine that gets a repsonse for a youtube anime video URL
-def get_yt_animevid(event,connection):
+def get_yt_animevid(event,connection, yt_file):
     print("=== YT Anime ===")
     try:
         connection.privmsg(event.target,"<Analysing video please wait>")
-        artlen = len(NICK) + 10
-        print(f"event: {event.arguments[0]}")
-        yt_file = event.arguments[0][artlen:]
         print(f"YT File: {yt_file}")
         response = client.models.generate_content(
         model='gemini-2.5-flash',
@@ -480,17 +478,9 @@ def get_yt_animevid(event,connection):
     except errors.APIError as e:
         print(e.code)
         print(e.message)
-        connection.privmsg(event.target,"YT routine error!")
+        connection.privmsg(event.target,"An error occurred while analyzing the video.")
         return
-# splits the response into paragraphs and sends them to the channel with a delay of 1 second between each paragraph and a maximum of 450 characters each to avoid flooding the channel
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
-        output = remove_lfcr(paragraph)
-        output = output[:450]
-        print(output)
-        connection.privmsg(event.target,output)        
-        time.sleep(1)
+    send_message_to_channel(connection, event.target, response.text)
     return
 
 # this is the routine that gets a meme for the conversation
@@ -508,17 +498,9 @@ def get_ai_meme(event,connection, chan):
     except errors.APIError as e:
         print(e.code)
         print(e.message)
-        connection.privmsg(event.target,"Meme routine error!")
+        connection.privmsg(event.target,"An error occurred while generating a meme.")
         return
-# splits the response into paragraphs and sends them to the channel with a delay of 1 second between each paragraph and a maximum of 450 characters each to avoid flooding the channel
-    para_text = response.text.splitlines()
-    nonempty_para_text = [line for line in para_text if line.strip()]
-    for paragraph in nonempty_para_text:
-        output = remove_lfcr(paragraph)
-        output = output[:450]
-        print(output)
-        connection.privmsg(event.target,output)        
-        time.sleep(1)
+    send_message_to_channel(connection, event.target, response.text)
     return
 
 
