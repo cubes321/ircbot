@@ -1,0 +1,4 @@
+irc
+requests
+google-generativeai
+yt-dlp
